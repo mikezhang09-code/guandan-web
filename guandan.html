@@ -104,10 +104,222 @@
     <div id="ovBody"></div>
     <button id="ovBtn" style="margin-top:16px;">继续</button>
   </div>
-  <a href="index.html" style="position:absolute;bottom:8px;left:10px;color:#cfe;font-size:12px;text-decoration:none;z-index:5;">🏠 选择游戏</a>
+  <div style="position:absolute;bottom:8px;left:10px;display:flex;gap:16px;z-index:5;font-size:12px;">
+    <a href="index.html" style="color:#cfe;text-decoration:none;">🏠 选择游戏</a>
+    <span id="sound-toggle" style="color:#cfe;cursor:pointer;user-select:none;">🔊 声音</span>
+  </div>
 </div>
 
 <script>
+/* ============================ 声音合成器 ============================ */
+const Sound = {
+  ctx: null,
+  muted: false,
+  init() {
+    if (!this.ctx) {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioContextClass) {
+        this.ctx = new AudioContextClass();
+      }
+      this.muted = localStorage.getItem('game_sound_muted') === 'true';
+      this.updateToggleButton();
+    }
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume();
+    }
+  },
+  toggleMute() {
+    this.init();
+    this.muted = !this.muted;
+    localStorage.setItem('game_sound_muted', this.muted);
+    this.updateToggleButton();
+    return this.muted;
+  },
+  updateToggleButton() {
+    const btn = document.getElementById('sound-toggle');
+    if (btn) {
+      btn.textContent = this.muted ? '🔇 静音' : '🔊 声音';
+    }
+  },
+  dealSequence() {
+    this.init();
+    if (this.muted || !this.ctx) return;
+    for (let i = 0; i < 6; i++) {
+      setTimeout(() => this.play('deal'), i * 60);
+    }
+  },
+  play(type) {
+    this.init();
+    if (this.muted || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    try {
+      switch(type) {
+        case 'click': {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(600, now);
+          osc.frequency.exponentialRampToValueAtTime(150, now + 0.08);
+          gain.gain.setValueAtTime(0.08, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+          osc.start(now);
+          osc.stop(now + 0.08);
+          break;
+        }
+        case 'play': {
+          const bufferSize = this.ctx.sampleRate * 0.12;
+          const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+          const data = buffer.getChannelData(0);
+          for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+          const noise = this.ctx.createBufferSource();
+          noise.buffer = buffer;
+          const filter = this.ctx.createBiquadFilter();
+          filter.type = 'lowpass';
+          filter.frequency.setValueAtTime(1000, now);
+          filter.frequency.exponentialRampToValueAtTime(150, now + 0.12);
+          const noiseGain = this.ctx.createGain();
+          noiseGain.gain.setValueAtTime(0.12, now);
+          noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+          noise.connect(filter);
+          filter.connect(noiseGain);
+          noiseGain.connect(this.ctx.destination);
+          noise.start(now);
+
+          const osc = this.ctx.createOscillator();
+          const oscGain = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(150, now);
+          osc.frequency.exponentialRampToValueAtTime(60, now + 0.12);
+          oscGain.gain.setValueAtTime(0.2, now);
+          oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+          osc.connect(oscGain);
+          oscGain.connect(this.ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.12);
+          break;
+        }
+        case 'pass': {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(250, now);
+          osc.frequency.linearRampToValueAtTime(180, now + 0.15);
+          gain.gain.setValueAtTime(0.06, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+          osc.start(now);
+          osc.stop(now + 0.15);
+          break;
+        }
+        case 'deal': {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(800, now);
+          osc.frequency.exponentialRampToValueAtTime(300, now + 0.04);
+          gain.gain.setValueAtTime(0.03, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+          osc.start(now);
+          osc.stop(now + 0.04);
+          break;
+        }
+        case 'win': {
+          const notes = [261.63, 329.63, 392.00, 523.25];
+          notes.forEach((freq, idx) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, now + idx * 0.05);
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(0.06, now + idx * 0.05 + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.05 + 0.3);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now + idx * 0.05);
+            osc.stop(now + idx * 0.05 + 0.3);
+          });
+          break;
+        }
+        case 'tribute': {
+          const osc1 = this.ctx.createOscillator();
+          const osc2 = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc1.type = 'sine';
+          osc1.frequency.setValueAtTime(523.25, now);
+          osc1.frequency.setValueAtTime(659.25, now + 0.1);
+          osc2.type = 'sine';
+          osc2.frequency.setValueAtTime(783.99, now);
+          osc2.frequency.setValueAtTime(1046.50, now + 0.1);
+          gain.gain.setValueAtTime(0.08, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+          osc1.connect(gain);
+          osc2.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc1.start(now);
+          osc1.stop(now + 0.35);
+          osc2.start(now);
+          osc2.stop(now + 0.35);
+          break;
+        }
+        case 'warn': {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(130, now);
+          gain.gain.setValueAtTime(0.1, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+          osc.start(now);
+          osc.stop(now + 0.15);
+          break;
+        }
+        case 'victory': {
+          const notes = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25];
+          notes.forEach((freq, idx) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, now + idx * 0.1);
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(0.08, now + idx * 0.1 + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.1 + 0.4);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now + idx * 0.1);
+            osc.stop(now + idx * 0.1 + 0.4);
+          });
+          break;
+        }
+        case 'defeat': {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(220, now);
+          osc.frequency.linearRampToValueAtTime(110, now + 0.6);
+          gain.gain.setValueAtTime(0.08, now);
+          gain.gain.linearRampToValueAtTime(0.08, now + 0.3);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+          osc.start(now);
+          osc.stop(now + 0.6);
+          break;
+        }
+      }
+    } catch (e) {
+      console.warn("Web Audio API error:", e);
+    }
+  }
+};
+window.addEventListener('click', () => Sound.init(), { once: true });
+window.addEventListener('touchstart', () => Sound.init(), { once: true });
+
 /* ============================ 牌局数据 ============================ */
 const SUITS = ['S','H','C','D'];           // 黑桃 红桃 梅花 方块
 const SUIT_SYM = {S:'♠',H:'♥',C:'♣',D:'♦'};
@@ -297,6 +509,7 @@ function newGame(){
   startDeal();
 }
 function startDeal(){
+  Sound.dealSequence();
   const deck=shuffle(makeDeck());
   players=[0,1,2,3].map(i=>({idx:i,hand:[],finished:false,lastShown:null}));
   deck.forEach((c,i)=>players[i%4].hand.push(c));
@@ -310,6 +523,7 @@ function startDeal(){
 
 /* ---------- 进贡 / 还贡 ---------- */
 function runTribute(){
+  Sound.play('tribute');
   const order=prevOrder, winT=team(order[0]);
   const dbl=team(order[1])===winT;                          // 双下=头游+二游同队
   const pairs=dbl ? [{p:order[3],r:order[0]},{p:order[2],r:order[1]}]
@@ -401,9 +615,10 @@ function applyPlay(idx,cards,desc){
   passed.clear(); players.forEach(q=>{ if(q.idx!==idx) q.lastShown=null; });
   p.lastShown=cards.slice();
   log(NAMES[idx]+' 出 '+descText(desc));
+  Sound.play('play');
   if(p.hand.length===0){ p.finished=true; finishedOrder.push(p); log('🎉 '+NAMES[idx]+' 出完!'); }
 }
-function applyPass(idx){ passed.add(idx); players[idx].lastShown='pass'; log(NAMES[idx]+' 不出'); }
+function applyPass(idx){ passed.add(idx); players[idx].lastShown='pass'; log(NAMES[idx]+' 不出'); Sound.play('pass'); }
 
 function bombCardIds(hand){                       // 属于炸弹的牌(不可拆)
   const ids=new Set(), byRank={}, jk={S:[],B:[]};
@@ -474,12 +689,14 @@ function endDeal(){
   if(teamLevels[winTeam]>=14 && gain>0){
     gameOver=true;
     title=me?'🏆 你方过了 A，获胜！':'😵 对方过了 A，你方失败';
+    Sound.play(me ? 'victory' : 'defeat');
     showOverlay(title,body,()=>newGame(),'再来一局');
     return;
   }
   teamLevels[winTeam]=Math.min(14,newLevel);
   currentLevel=teamLevels[winTeam];
   title=(me?'本局你方头游':'本局对方头游')+' — 级牌升至 '+valueName(currentLevel);
+  Sound.play(me ? 'win' : 'defeat');
   showOverlay(title,body,()=>{ prevOrder=order; startDeal(); },'下一局');
 }
 
@@ -528,6 +745,7 @@ function onHint(){
 function toggleCard(id){
   if((currentPlayer!==0&&!returnMode)||gameOver) return;
   if(selected.has(id)) selected.delete(id); else selected.add(id);
+  Sound.play('click');
   renderHand();
 }
 
@@ -586,7 +804,7 @@ function updateButtons(){
 }
 let logs=[];
 function log(t){ logs.unshift(t); logs=logs.slice(0,8); document.getElementById('log').innerHTML=logs.join('<br>'); }
-function flash(t){ log('⚠ '+t); }
+function flash(t){ log('⚠ '+t); Sound.play('warn'); }
 function showOverlay(title,body,cb,btn){
   document.getElementById('ovTitle').textContent=title;
   document.getElementById('ovBody').innerHTML=body;
@@ -601,6 +819,8 @@ document.getElementById('btnPass').onclick=onPass;
 document.getElementById('btnHint').onclick=onHint;
 document.getElementById('btnSort').onclick=()=>{ sortHand(players[0].hand); renderHand(); };
 document.getElementById('btnHelp').onclick=()=>window.open('help.html','_blank');
+document.getElementById('sound-toggle').onclick=()=>Sound.toggleMute();
+Sound.updateToggleButton();
 newGame();
 </script>
 </body>
