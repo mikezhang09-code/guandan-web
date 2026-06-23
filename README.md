@@ -71,6 +71,10 @@ git add -A && git commit -m "..." && git push
 
 游戏逻辑全部内联在各自的 HTML 文件中。两个游戏的规则引擎都经过无头模拟测试（AI 自动对战数千手）验证：牌型识别、大小比较、跟牌合法性、牌张守恒、完整对局流程均无误。
 
+## License
+
+[MIT](LICENSE) © 2026 Mike Zhang
+
 ---
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
