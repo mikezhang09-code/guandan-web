@@ -38,15 +38,27 @@
   a.back { display:inline-block; margin-top:16px; background:#2e8b57; color:#fff; text-decoration:none;
     padding:10px 20px; border-radius:22px; font-weight:600; }
   code { background:#eee; padding:1px 5px; border-radius:4px; font-size:13px; }
+  .tabs { display:flex; gap:8px; margin:6px 0 8px; }
+  .tabs button { font:inherit; font-size:15px; font-weight:600; padding:8px 18px; border:none; cursor:pointer;
+    border-radius:22px; background:#dfe6e0; color:#2c3e36; }
+  .tabs button.active { background:#2e8b57; color:#fff; }
+  .card.tr { background:#fff7d6; border-color:#e0a800; }
+  .card.pt::before { content:"·"; position:absolute; top:-1px; right:3px; color:#0a8; font-size:16px; }
+  section { display:none; } section.show { display:block; }
 </style>
 </head>
 <body>
 <header>
-  <h1>掼蛋 · 规则与实例</h1>
+  <h1>扑克牌桌 · 规则与实例</h1>
   <p>下面每条规则都用真实的牌来演示，看一遍就会玩。</p>
 </header>
 <main>
+  <div class="tabs">
+    <button id="tabG" onclick="showTab('guandan')">掼蛋</button>
+    <button id="tabS" onclick="showTab('shengji')">升级 · 拖拉机</button>
+  </div>
 
+  <section id="sec-guandan">
   <h2>1. 目标与阵营</h2>
   <p>4 人用 <b>2 副牌（共 108 张）</b>，每人发 27 张。</p>
   <ul>
@@ -126,8 +138,76 @@
     <li><b>提示</b>：自动帮你选一手能出的牌。</li>
     <li><b>理牌</b>：重新整理手牌顺序。</li>
   </ul>
+  </section>
 
-  <a class="back" href="index.html">← 返回游戏</a>
+  <section id="sec-shengji">
+  <h2 id="shengji">1. 目标与阵营</h2>
+  <p>4 人用 <b>2 副牌（共 108 张）</b>。<b>你</b>+<b>对家</b> 一队，<b>左家</b>+<b>右家</b> 一队。</p>
+  <ul>
+    <li>每队有自己的「级别」，从 <code>2</code> 开始。<b>庄家</b>一方努力守分升级，<b>闲家</b>一方努力抓分上台。</li>
+    <li>谁先把级别升过 <b>A</b> 并守住，谁这队获胜。</li>
+  </ul>
+
+  <h2>2. 发牌与底牌</h2>
+  <p>每人发 <b>25 张</b>，留 <b>8 张底牌</b>。庄家把 8 张底牌拿进手，再选 <b>8 张埋回去（扣底）</b>。底牌里的分，最后由赢得<b>最后一墩</b>的一方按翻倍计算。</p>
+
+  <h2>3. 级牌与主牌（最重要）</h2>
+  <p>本局打的点数叫<b>级牌</b>（＝庄家队的级别，如打 2、打 5、打 A）。庄家选一个<b>主牌花色</b>（也可选「无主」）。</p>
+  <p>下列牌都是<b>主牌（trump）</b>，主牌永远大于任何副牌：</p>
+  <div class="ex"><span class="lbl">主牌(从大到小)</span><span id="sjTrump"></span></div>
+  <p style="font-size:14px;color:#555;">即：大王 ＞ 小王 ＞ 主花色级牌 ＞ 其他花色级牌 ＞ 主花色 A、K…3。其余三门是副牌，按 A 到 2 大小。</p>
+  <div class="tip">例：打 <b>5</b>、主牌 <b>♠</b> 时，所有的 5 和所有 ♠ 都是主牌；♠5 是「主级牌」最大的一档（仅次于王）。</div>
+
+  <h2>4. 牌型（出牌单位）</h2>
+  <table id="sjTypeTable"></table>
+  <div class="note">连对要求<b>同花色、点数相连</b>（级牌被抽走，所以会“跳过”级牌相连）。本游戏出牌以单张/对子/连对为单位。</div>
+
+  <h2>5. 跟牌规则</h2>
+  <ul>
+    <li>必须<b>跟出与首家相同的花色</b>：手里有几张就得出几张该花色的牌。</li>
+    <li>首家出对子时，你若有该花色的对子，<b>必须出对子</b>。</li>
+    <li>该花色没有了（缺门），可以<b>垫牌</b>或用<b>主牌将吃</b>。</li>
+  </ul>
+
+  <h2>6. 谁赢这一墩</h2>
+  <ul>
+    <li>没人出主牌：花色、张数、结构相同的，<b>点数大的赢</b>。垫的别的花色不算数。</li>
+    <li>有人用主牌将吃：<b>主牌赢副牌</b>；多个主牌则大的赢。</li>
+    <li>用对子将吃必须出主牌对子，单张将吃出主牌单张，结构要对得上。</li>
+  </ul>
+  <div class="ex"><span class="lbl">将吃</span><span id="sjRuff"></span><span class="win">主牌 ♠7 吃掉副牌 ♥A，赢墩</span></div>
+
+  <h2>7. 分牌与扣底</h2>
+  <p>分牌：<b>5＝5 分</b>，<b>10＝10 分</b>，<b>K＝10 分</b>。全副共 <b>200 分</b>。</p>
+  <div class="ex"><span class="lbl">分牌</span><span id="sjPts"></span><span class="win">绿点标记的就是分牌</span></div>
+  <ul>
+    <li>赢墩一方把该墩所有牌收走，分进自己队。只统计<b>闲家</b>抓到的分。</li>
+    <li>若<b>闲家赢了最后一墩</b>，底牌里的分翻倍计入闲家（翻 <code>2 × 最后一墩张数</code> 倍）。</li>
+  </ul>
+
+  <h2>8. 升级 / 上台（闲家目标 80 分）</h2>
+  <table>
+    <tr><th>闲家得分</th><th>结果</th></tr>
+    <tr><td>0 分</td><td>庄家队升 3 级，继续坐庄</td></tr>
+    <tr><td>1–35 分</td><td>庄家队升 2 级，继续坐庄</td></tr>
+    <tr><td>40–75 分</td><td>庄家队升 1 级，继续坐庄</td></tr>
+    <tr><td>80–115 分</td><td>闲家上台坐庄（不升级）</td></tr>
+    <tr><td>120–155 分</td><td>闲家升 1 级并上台</td></tr>
+    <tr><td>160–195 分</td><td>闲家升 2 级并上台</td></tr>
+    <tr><td>≥200 分</td><td>闲家升 3 级并上台</td></tr>
+  </table>
+  <p>级别按 <code>2 → … → A</code> 上升。某队打到 <b>A</b> 且守住（闲家不足 80），该队获胜。</p>
+
+  <h2>9. 操作流程</h2>
+  <ul>
+    <li>轮到你坐庄：先点<b>主牌花色</b>按钮叫主，再选 8 张牌点<b>埋底</b>。</li>
+    <li>出牌时选牌按<b>出牌</b>；不确定就按<b>提示</b>，会帮你选一手合法牌。</li>
+    <li><b>理牌</b>整理顺序（主牌排在最前并高亮）。</li>
+  </ul>
+  <div class="note">本实现为清晰起见做了简化：庄家固定轮转并由庄家定主牌花色（未做发牌时的抢叫主），连对将吃仅支持同花色连对；其余规则与标准升级一致。</div>
+  </section>
+
+  <a class="back" href="index.html">← 返回首页</a>
 </main>
 
 <script>
@@ -196,6 +276,39 @@ b3.append(row(['S7','H7','C7','D7']),vs(),row(['S14','H14','C14','D14']),winTxt(
 // 进贡
 document.getElementById('tribGive').appendChild(row(['BJ']));
 document.getElementById('tribBack').appendChild(row(['C4']));
+
+/* ===== 升级 实例 ===== */
+function specRank(sp){ if(sp==='BJ'||sp==='SJ') return null; return +sp.slice(1); }
+function sjCardEl(sp, trump){ const el=card(sp);
+  if(trump||sp==='BJ'||sp==='SJ') el.classList.add('tr');
+  const r=specRank(sp); if(r===5||r===10||r===13) el.classList.add('pt');
+  return el; }
+function sjRow(items){ const r=document.createElement('span'); r.className='row';
+  items.forEach(it=>r.appendChild(sjCardEl(it[0], it[1]))); return r; }
+put('sjTrump', sjRow([['BJ',1],['SJ',1],['S5',1],['H5',1],['S14',1],['S13',1],['S3',1]]));
+put('sjRuff', (()=>{ const w=document.createElement('span');
+  w.append(sjRow([['S7',1]]), vs(), sjRow([['H14',0]])); return w; })());
+put('sjPts', sjRow([['S5',0],['C10',0],['D13',0]]));
+const stb=document.getElementById('sjTypeTable');
+stb.innerHTML='<tr><th>牌型</th><th>说明</th><th>实例</th></tr>';
+[['单张','一张牌',[['S9',0]]],
+ ['对子','两张完全相同的牌',[['S7',0],['S7',0]]],
+ ['连对（拖拉机）','同花色、点数相连的对子',[['S7',0],['S7',0],['S8',0],['S8',0]]],
+].forEach(([n,d,c])=>{ const tr=document.createElement('tr');
+  const a=document.createElement('td'); a.innerHTML='<b>'+n+'</b>';
+  const b=document.createElement('td'); b.textContent=d;
+  const e=document.createElement('td'); e.appendChild(sjRow(c));
+  tr.append(a,b,e); stb.appendChild(tr); });
+
+/* ===== Tab 切换 ===== */
+function showTab(name){
+  document.getElementById('sec-guandan').classList.toggle('show', name==='guandan');
+  document.getElementById('sec-shengji').classList.toggle('show', name==='shengji');
+  document.getElementById('tabG').classList.toggle('active', name==='guandan');
+  document.getElementById('tabS').classList.toggle('active', name==='shengji');
+  if(history.replaceState) history.replaceState(null,'', name==='shengji'?'#shengji':'#guandan');
+}
+showTab(location.hash==='#shengji'?'shengji':'guandan');
 </script>
 </body>
 </html>

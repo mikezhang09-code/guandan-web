@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>升级 · 拖拉机</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    background: radial-gradient(circle at 50% 35%, #355c7d 0%, #1c3b54 60%, #102536 100%);
+    color:#fff; height:100vh; overflow:hidden; user-select:none; }
+  #board { position:relative; width:100%; height:100%; }
+  .seat { position:absolute; text-align:center; }
+  .seat .name { font-size:14px; font-weight:600; padding:2px 10px; border-radius:12px;
+    background:rgba(0,0,0,.3); display:inline-block; }
+  .seat .name.dealer::after { content:" 庄"; color:#ffd54a; }
+  .seat.turn .name { background:#ffcc00; color:#222; box-shadow:0 0 12px #ffcc00; }
+  .seat .count { font-size:12px; opacity:.85; margin-top:2px; }
+  #seat2 { top:8px; left:50%; transform:translateX(-50%); }
+  #seat1 { top:40%; left:10px; transform:translateY(-50%); }
+  #seat3 { top:40%; right:10px; transform:translateY(-50%); }
+  #seat0 { bottom:150px; left:50%; transform:translateX(-50%); }
+  .played { margin-top:4px; min-height:54px; display:flex; justify-content:center; gap:1px; }
+  .played.win { filter:drop-shadow(0 0 6px #ffd54a); }
+  .card { background:#fff; color:#222; border-radius:6px; border:1px solid #999;
+    display:inline-flex; flex-direction:column; align-items:center; justify-content:flex-start;
+    font-weight:700; position:relative; box-shadow:0 1px 3px rgba(0,0,0,.4); }
+  .card.red { color:#d40000; }
+  .card.tr { background:#fff7d6; border-color:#e0a800; }
+  .card.pt::before { content:"·"; position:absolute; top:0; right:3px; color:#0a8; font-size:16px; }
+  .mini { width:32px; height:48px; font-size:13px; padding-top:3px; }
+  .mini .r { font-size:14px; } .mini .s { font-size:13px; }
+  #hand-area { position:absolute; bottom:0; left:0; right:0; padding:6px 8px 10px;
+    background:linear-gradient(to top, rgba(0,0,0,.45), transparent); }
+  #hand { display:flex; justify-content:center; flex-wrap:wrap; min-height:92px; }
+  #hand .card { width:50px; height:80px; font-size:16px; margin-left:-16px; padding-top:4px; transition:transform .12s; cursor:pointer; }
+  #hand .card:first-child { margin-left:0; }
+  #hand .card .r { font-size:18px; } #hand .card .s { font-size:17px; }
+  #hand .card.sel { transform:translateY(-16px); box-shadow:0 0 8px #ffcc00; }
+  #controls { display:flex; justify-content:center; gap:8px; margin-top:6px; align-items:center; flex-wrap:wrap; }
+  button { font-family:inherit; font-size:15px; font-weight:600; padding:9px 16px; border:none;
+    border-radius:22px; cursor:pointer; color:#222; background:#ffd54a; box-shadow:0 2px 6px rgba(0,0,0,.4); }
+  button:disabled { opacity:.4; cursor:default; }
+  button.ghost { background:rgba(255,255,255,.85); }
+  button.suit { font-size:18px; padding:9px 14px; }
+  button.red { color:#d40000; }
+  #status { position:absolute; top:6px; left:8px; font-size:12px; line-height:1.6;
+    background:rgba(0,0,0,.35); padding:6px 10px; border-radius:8px; }
+  #status b { color:#ffd54a; }
+  #log { position:absolute; top:6px; right:8px; width:158px; font-size:11px; line-height:1.5;
+    background:rgba(0,0,0,.3); padding:6px 8px; border-radius:8px; max-height:130px; overflow:hidden; }
+  #overlay { position:absolute; inset:0; background:rgba(0,0,0,.72); display:none;
+    flex-direction:column; align-items:center; justify-content:center; z-index:10; text-align:center; padding:20px; }
+  #overlay h2 { margin:0 0 12px; } #overlay p { margin:4px; font-size:15px; }
+  #center-hint { position:absolute; top:47%; left:50%; transform:translate(-50%,-50%); font-size:13px; opacity:.5; pointer-events:none; }
+  a.home { position:absolute; bottom:8px; left:10px; color:#cfe; font-size:12px; }
+</style>
+</head>
+<body>
+<div id="board">
+  <div id="status"></div>
+  <div id="log"></div>
+  <div id="center-hint">升级 · 拖拉机</div>
+  <div class="seat" id="seat2"><span class="name">对家(队友)</span><div class="count"></div><div class="played"></div></div>
+  <div class="seat" id="seat1"><span class="name">左家</span><div class="count"></div><div class="played"></div></div>
+  <div class="seat" id="seat3"><span class="name">右家</span><div class="count"></div><div class="played"></div></div>
+  <div class="seat" id="seat0"><div class="played"></div></div>
+
+  <div id="hand-area">
+    <div id="hand"></div>
+    <div id="controls"></div>
+  </div>
+
+  <div id="overlay"><h2 id="ovTitle"></h2><div id="ovBody"></div>
+    <button id="ovBtn" style="margin-top:16px;">继续</button></div>
+  <a class="home" href="index.html">🏠 选择游戏</a>
+</div>
+
+<script>
+/* ===== 基础 ===== */
+const SUITS=['S','H','C','D'], SUIT_SYM={S:'♠',H:'♥',C:'♣',D:'♦'}, RED=new Set(['H','D']);
+const SUIT_NAME={S:'黑桃',H:'红桃',C:'梅花',D:'方块',NT:'无主'};
+const NAMES=['你','左家','对家','右家'];
+const team=i=>i%2;
+let uid=0;
+function makeDeck(){ const d=[]; for(let k=0;k<2;k++){
+  for(const s of SUITS) for(let r=2;r<=14;r++) d.push({id:uid++,suit:s,rank:r,joker:null});
+  d.push({id:uid++,suit:'J',rank:null,joker:'S'}); d.push({id:uid++,suit:'J',rank:null,joker:'B'}); } return d; }
+function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]];} return a; }
+function pts(c){ return c.rank===5?5 : (c.rank===10||c.rank===13)?10 : 0; }
+
+/* ===== 局面状态 ===== */
+let teamLevels=[2,2], declarerTeam=0, declarerSeat=0;
+let level=2, trumpSuit='NT', SEQ=[], SEQIDX={};
+let players=[], kitty=[], gameOver=false;
+let phase='', trick=[], trickOrder=[], turnPos=0, leadSeat=0, lastTrickInfo=null;
+let teamPoints=[0,0];           // 各队本局收到的分(只闲家分用于结算)
+let selected=new Set();
+
+function buildSeq(){ SEQ=[]; SEQIDX={}; for(let r=2;r<=14;r++) if(r!==level) SEQ.push(r);
+  SEQ.forEach((r,i)=>SEQIDX[r]=i); }
+
+/* ===== 牌的属性 ===== */
+function isTrump(c){ return !!c.joker || c.rank===level || (trumpSuit!=='NT'&&c.suit===trumpSuit); }
+function effSuit(c){ return isTrump(c)?'T':c.suit; }
+function tval(c){
+  if(c.joker==='B') return 1006; if(c.joker==='S') return 1005;
+  if(c.rank===level) return c.suit===trumpSuit?1004:1003;
+  if(isTrump(c)) return 100+c.rank;     // 主花色自然牌
+  return c.rank;                        // 副牌按点数
+}
+function rankText(c){ if(c.joker) return c.joker==='B'?'大':'小';
+  return ({11:'J',12:'Q',13:'K',14:'A'})[c.rank]||''+c.rank; }
+
+/* ===== 牌型识别 ===== */
+function sameCard(a,b){ return a.joker?a.joker===b.joker : (!b.joker&&a.rank===b.rank&&a.suit===b.suit); }
+function detectCombo(cards){
+  if(!cards.length) return null;
+  const g=effSuit(cards[0]); if(cards.some(c=>effSuit(c)!==g)) return null;
+  if(cards.length===1) return {type:'single',size:1,group:g,topVal:tval(cards[0])};
+  if(cards.length===2 && sameCard(cards[0],cards[1])) return {type:'pair',size:2,group:g,topVal:tval(cards[0])};
+  if(cards.length>=4 && cards.length%2===0){
+    const t=asTractor(cards,g); if(t) return t;
+  }
+  return null;
+}
+function asTractor(cards,g){
+  // 仅支持: 同副花色 或 主花色自然牌 的连对
+  const nat = g==='T' ? cards.filter(c=>c.suit===trumpSuit&&c.rank!==level&&!c.joker) : cards;
+  if(nat.length!==cards.length) return null;
+  // 配对
+  const byKey={}; cards.forEach(c=>{ const k=c.suit+c.rank; (byKey[k]=byKey[k]||[]).push(c); });
+  const ranks=[]; for(const k in byKey){ if(byKey[k].length!==2) return null; ranks.push(byKey[k][0].rank); }
+  if(ranks.length!==cards.length/2) return null;
+  ranks.sort((a,b)=>SEQIDX[a]-SEQIDX[b]);
+  for(let i=1;i<ranks.length;i++) if(SEQIDX[ranks[i]]-SEQIDX[ranks[i-1]]!==1) return null;
+  const top=ranks[ranks.length-1];
+  return {type:'tractor',size:cards.length,group:g,topVal:(g==='T'?100:0)+top};
+}
+
+/* ===== 跟牌合法性 ===== */
+function inGroup(c,group){ return group==='T'?isTrump(c):(!isTrump(c)&&c.suit===group); }
+function hasPair(cards,group){ const m={}; for(const c of cards){ if(!inGroup(c,group))continue;
+  const k=c.suit+c.rank+(c.joker||''); if(m[k]) return true; m[k]=1; } return false; }
+function validateFollow(sel,hand,lead){
+  if(sel.length!==lead.size) return {ok:false,why:`需要出 ${lead.size} 张`};
+  const G=hand.filter(c=>inGroup(c,lead.group)), need=Math.min(lead.size,G.length);
+  const selG=sel.filter(c=>inGroup(c,lead.group)).length;
+  if(selG!==need) return {ok:false,why:`必须跟 ${need} 张${lead.group==='T'?'主牌':SUIT_NAME[lead.group]}`};
+  if(lead.type==='pair' && G.length>=2 && hasPair(hand,lead.group) && !hasPair(sel,lead.group))
+    return {ok:false,why:'有对子时必须出对子'};
+  return {ok:true};
+}
+function forcedFollow(hand,lead){             // 一定合法的兜底跟牌
+  const G=hand.filter(c=>inGroup(c,lead.group)).slice().sort((a,b)=>tval(a)-tval(b));
+  const need=Math.min(lead.size,G.length), out=[];
+  if(lead.type==='pair' && need>=2 && hasPair(hand,lead.group)){
+    const m={}; for(const c of G){ const k=c.suit+c.rank+(c.joker||''); if(m[k]){ out.push(m[k],c); break; } m[k]=c; }
+  }
+  for(const c of G){ if(out.length>=need) break; if(!out.includes(c)) out.push(c); }
+  if(out.length<lead.size){ const others=hand.filter(c=>!inGroup(c,lead.group)&&!out.includes(c))
+      .sort((a,b)=>pts(a)-pts(b)||tval(a)-tval(b)); while(out.length<lead.size&&others.length) out.push(others.shift()); }
+  return out.slice(0,lead.size);
+}
+
+/* ===== 比墩 ===== */
+function trickWinner(){
+  let best={combo:trick[0].combo, seat:trick[0].seat};
+  for(let i=1;i<trick.length;i++){ const c=trick[i].combo; if(!c) continue;
+    if(c.type!==best.combo.type||c.size!==best.combo.size) continue;
+    const bT=best.combo.group==='T', cT=c.group==='T';
+    if(cT&&!bT) best={combo:c,seat:trick[i].seat};
+    else if(c.group===best.combo.group && c.topVal>best.combo.topVal) best={combo:c,seat:trick[i].seat};
+  }
+  return best.seat;
+}
+
+/* ===== 排序 / 渲染 ===== */
+function suitOrder(c){ if(isTrump(c)) return 0; return {S:1,H:2,C:3,D:4}[c.suit]; }
+function sortHand(h){ h.sort((a,b)=> suitOrder(a)-suitOrder(b) || tval(b)-tval(a) || a.suit.localeCompare(b.suit)); }
+function cardEl(c,cls){ const d=document.createElement('div');
+  d.className='card '+(cls||'')+((c.joker||RED.has(c.suit))?' red':'')+(isTrump(c)?' tr':'')+(pts(c)?' pt':'');
+  if(c.joker) d.innerHTML=`<div class="r">${c.joker==='B'?'大':'小'}</div><div class="s">王</div>`;
+  else d.innerHTML=`<div class="r">${rankText(c)}</div><div class="s">${SUIT_SYM[c.suit]}</div>`;
+  return d; }
+function renderSeat(i){ const seat=document.getElementById('seat'+i), p=players[i];
+  seat.classList.toggle('turn', phase==='play'&&trickOrder[turnPos]===i&&!gameOver);
+  const nm=seat.querySelector('.name'); if(nm) nm.classList.toggle('dealer', i===declarerSeat);
+  if(i!==0) seat.querySelector('.count').textContent='剩 '+p.hand.length+' 张';
+  const pl=seat.querySelector('.played'); pl.innerHTML=''; pl.classList.remove('win');
+  if(Array.isArray(p.lastShown)) p.lastShown.forEach(c=>pl.appendChild(cardEl(c,'mini'))); }
+function renderHand(){ const h=document.getElementById('hand'); h.innerHTML='';
+  players[0].hand.forEach(c=>{ const el=cardEl(c); if(selected.has(c.id)) el.classList.add('sel');
+    el.onclick=()=>toggleCard(c.id); h.appendChild(el); }); }
+function renderAll(){ [0,1,2,3].forEach(renderSeat); renderHand(); renderStatus(); }
+function renderStatus(){ const def=1-declarerTeam;
+  document.getElementById('status').innerHTML=
+    `主牌：<b>${trumpSuit==='NT'?'无主':SUIT_NAME[trumpSuit]}</b>　级牌：<b>${rankText({rank:level})}</b><br>`+
+    `庄家：<b>${NAMES[declarerSeat]}</b>(${team(declarerSeat)===0?'你方':'对方'})<br>`+
+    `你方等级：<b>${rankText({rank:teamLevels[0]})}</b>　对方：<b>${rankText({rank:teamLevels[1]})}</b><br>`+
+    `闲家得分：<b>${teamPoints[def]}</b> / 80`; }
+function toggleCard(id){ if(gameOver) return;
+  if(!(phase==='bury' || (phase==='play'&&trickOrder[turnPos]===0))) return;
+  if(selected.has(id)) selected.delete(id); else selected.add(id); renderHand(); }
+
+/* ===== 控制栏 ===== */
+function setControls(html){ document.getElementById('controls').innerHTML=html; }
+function baseControls(){ setControls(
+  `<button id="bPlay">出牌</button><button id="bHint" class="ghost">提示</button>`+
+  `<button id="bSort" class="ghost">理牌</button><button id="bHelp" class="ghost">规则</button>`);
+  bPlay.onclick=onPlay; bHint.onclick=onHint;
+  bSort.onclick=()=>{ sortHand(players[0].hand); renderHand(); };
+  bHelp.onclick=()=>window.open('help.html#shengji','_blank'); }
+
+/* ===== 发牌 / 叫主 / 扣底 ===== */
+function newGame(){ teamLevels=[2,2]; declarerTeam=0; declarerSeat=0; gameOver=false; startDeal(); }
+function startDeal(){
+  level=teamLevels[declarerTeam]; buildSeq();
+  const deck=shuffle(makeDeck());
+  players=[0,1,2,3].map(i=>({idx:i,hand:[],lastShown:null}));
+  for(let i=0;i<100;i++) players[i%4].hand.push(deck[i]);
+  kitty=deck.slice(100);                       // 8 张底牌
+  teamPoints=[0,0]; selected.clear(); trick=[]; lastTrickInfo=null;
+  log(`新一局：庄家 ${NAMES[declarerSeat]}，打 ${rankText({rank:level})}`);
+  phase='declare'; declareTrump();
+}
+function declareTrump(){
+  if(declarerSeat!==0){ aiDeclare(); return; }
+  setControls(`<span style="font-size:13px;margin-right:4px;">选主牌花色:</span>`+
+    SUITS.map(s=>`<button class="suit ${RED.has(s)?'red':''}" data-s="${s}">${SUIT_SYM[s]}</button>`).join('')+
+    `<button class="suit" data-s="NT">无主</button>`);
+  document.querySelectorAll('#controls button').forEach(b=>b.onclick=()=>chooseTrump(b.dataset.s));
+  players.forEach(p=>sortHand(p.hand)); renderAll();
+  log('请选择主牌花色');
+}
+function aiDeclare(){
+  const h=players[declarerSeat].hand, cnt={S:0,H:0,C:0,D:0};
+  h.forEach(c=>{ if(!c.joker) cnt[c.suit]++; });
+  let best='S'; for(const s of SUITS) if(cnt[s]>cnt[best]) best=s;
+  chooseTrump(best);
+}
+function chooseTrump(s){ trumpSuit=s; level=teamLevels[declarerTeam];
+  players.forEach(p=>sortHand(p.hand));
+  log(`主牌定为 ${trumpSuit==='NT'?'无主':SUIT_NAME[trumpSuit]}`);
+  // 庄家拿底牌
+  const d=players[declarerSeat]; d.hand.push(...kitty); kitty=[]; sortHand(d.hand);
+  phase='bury'; beginBury();
+}
+function beginBury(){
+  if(declarerSeat!==0){ aiBury(); return; }
+  setControls(`<button id="bBury">埋底(选8张)</button><button id="bSort" class="ghost">理牌</button>`+
+    `<button id="bHelp" class="ghost">规则</button>`);
+  bBury.onclick=confirmBury; bSort.onclick=()=>{ sortHand(players[0].hand); renderHand(); };
+  bHelp.onclick=()=>window.open('help.html#shengji','_blank');
+  renderAll(); log('你拿到底牌，请选 8 张埋入底牌（避免埋分牌/主牌）');
+}
+function confirmBury(){
+  if(selected.size!==8){ flash('请正好选择 8 张'); return; }
+  const d=players[0]; kitty=d.hand.filter(c=>selected.has(c.id));
+  d.hand=d.hand.filter(c=>!selected.has(c.id)); selected.clear(); sortHand(d.hand);
+  startPlay();
+}
+function aiBury(){ const d=players[declarerSeat];
+  const cand=d.hand.slice().sort((a,b)=> (isTrump(a)-isTrump(b)) || (pts(a)-pts(b)) || tval(a)-tval(b));
+  kitty=cand.slice(0,8); const ids=new Set(kitty.map(c=>c.id));
+  d.hand=d.hand.filter(c=>!ids.has(c.id)); sortHand(d.hand);
+  startPlay();
+}
+
+/* ===== 出牌流程 ===== */
+function startPlay(){ phase='play'; baseControls(); leadSeat=declarerSeat; startTrick(leadSeat); }
+function startTrick(lead){ trick=[]; trickOrder=[lead,(lead+1)%4,(lead+2)%4,(lead+3)%4]; turnPos=0;
+  players.forEach(p=>p.lastShown=null); renderAll(); takeTurn(); }
+function takeTurn(){
+  if(turnPos>=4){ return resolveTrick(); }
+  const seat=trickOrder[turnPos];
+  renderAll(); updateControls();
+  if(seat===0) return;                 // 等人类
+  setTimeout(()=>{ const cards = turnPos===0? aiLead(seat) : aiFollow(seat); commit(seat,cards); }, 600);
+}
+function updateControls(){ const my=phase==='play'&&trickOrder[turnPos]===0&&!gameOver;
+  const bp=document.getElementById('bPlay'), bh=document.getElementById('bHint');
+  if(bp) bp.disabled=!my; if(bh) bh.disabled=!my; }
+function commit(seat,cards){
+  const p=players[seat]; const ids=new Set(cards.map(c=>c.id));
+  p.hand=p.hand.filter(c=>!ids.has(c.id)); p.lastShown=cards.slice();
+  const combo = turnPos===0 ? detectCombo(cards) : (detectCombo(cards)||null);
+  trick.push({seat,cards:cards.slice(),combo: turnPos===0?combo:detectCombo(cards)});
+  log(`${NAMES[seat]} 出 ${cards.map(rankText).join('')}`);
+  turnPos++; takeTurn();
+}
+function resolveTrick(){
+  const w=trickWinner(); const wt=team(w);
+  let p=0; trick.forEach(t=>t.cards.forEach(c=>p+=pts(c)));
+  teamPoints[wt]+=p;
+  document.querySelector('#seat'+w+' .played').classList.add('win');
+  lastTrickInfo={winner:w, size:trick[0].cards.length};
+  log(`${NAMES[w]} 赢墩` + (p?`，得 ${p} 分`:''));
+  renderStatus();
+  const done = players.every(pl=>pl.hand.length===0);
+  setTimeout(()=>{ if(done) endDeal(); else startTrick(w); }, 900);
+}
+
+/* ===== AI ===== */
+function groupPairs(G){ const m={},res=[]; for(const c of G){ const k=c.suit+c.rank+(c.joker||'');
+    if(m[k]){ res.push([m[k],c]); m[k]=null; } else m[k]=c; }
+  return res.sort((a,b)=>tval(a[0])-tval(b[0])); }
+function tractorsOf(G,size){ // 同组 size 张连对
+  const need=size/2, byRank={};
+  G.forEach(c=>{ if(effSuit(c)==='T' && (c.joker||c.rank===level||c.suit!==trumpSuit)) return;
+    const k=c.suit+c.rank; (byRank[k]=byRank[k]||[]).push(c); });
+  const pairs=Object.values(byRank).filter(a=>a.length>=2).map(a=>[a[0],a[1]]);
+  pairs.sort((a,b)=>SEQIDX[a[0].rank]-SEQIDX[b[0].rank]);
+  const res=[];
+  for(let i=0;i+need<=pairs.length;i++){ let ok=true;
+    for(let j=1;j<need;j++) if(SEQIDX[pairs[i+j][0].rank]-SEQIDX[pairs[i+j-1][0].rank]!==1){ok=false;break;}
+    if(ok) res.push(pairs.slice(i,i+need).flat()); }
+  return res; }
+function buildTrumpCombo(type,size){ const T=players; /*unused*/ }
+function aiLead(seat){ const hand=players[seat].hand;
+  const nonTr=hand.filter(c=>!isTrump(c));
+  // 优先甩低对子
+  const pairs=groupPairs(nonTr).filter(pr=>pr[0].rank<11 && pts(pr[0])===0);
+  if(pairs.length) return pairs[0];
+  const pool=(nonTr.length?nonTr:hand).slice().sort((a,b)=>pts(a)-pts(b)||tval(a)-tval(b));
+  return [pool[0]]; }
+function aiFollow(seat){
+  const hand=players[seat].hand, lead=trick[0].combo;
+  const best={combo:trick.reduce((b,t)=>{ if(!t.combo)return b; if(!b)return t;
+      const bT=b.combo.group==='T',cT=t.combo.group==='T';
+      if(cT&&!bT)return t; if(t.combo.group===b.combo.group&&t.combo.topVal>b.combo.topVal)return t; return b; },null).combo,
+    seat:(()=>{ let b=trick[0]; for(const t of trick){ if(!t.combo)continue;
+      const bT=b.combo.group==='T',cT=t.combo.group==='T';
+      if(cT&&!bT)b=t; else if(t.combo&&t.combo.group===b.combo.group&&t.combo.topVal>b.combo.topVal)b=t; } return b.seat; })()};
+  const oppWin=team(best.seat)!==team(seat), mateWin=!oppWin&&best.seat!==seat;
+  const G=hand.filter(c=>inGroup(c,lead.group)).sort((a,b)=>tval(a)-tval(b));
+  const beats=cards=>{ const c=detectCombo(cards); if(!c||c.type!==lead.type||c.size!==lead.size) return false;
+    if(c.group==='T'&&best.combo.group!=='T') return true;
+    return c.group===best.combo.group && c.topVal>best.combo.topVal; };
+  let chosen=null;
+  if(G.length>=lead.size){
+    if(lead.type==='single'){
+      if(oppWin){ const c=G.filter(x=>beats([x]))[0]; if(c) chosen=[c]; }
+      if(!chosen){ const s=G.slice().sort((a,b)=> mateWin? (pts(b)-pts(a)||tval(a)-tval(b)) : (pts(a)-pts(b)||tval(a)-tval(b))); chosen=[s[0]]; }
+    } else if(lead.type==='pair'){
+      const prs=groupPairs(G);
+      if(oppWin){ const c=prs.find(p=>beats(p)); if(c) chosen=c; }
+      if(!chosen){ if(prs.length){ chosen= mateWin? prs[prs.length-1] : prs[0]; }
+        else { const s=G.slice().sort((a,b)=> mateWin?(pts(b)-pts(a)):(pts(a)-pts(b))||tval(a)-tval(b)); chosen=[s[0],s[1]]; } }
+    } else { const trs=tractorsOf(G,lead.size);
+      if(oppWin){ const c=trs.find(t=>beats(t)); if(c) chosen=c; }
+      if(!chosen) chosen= trs[0] || G.slice(0,lead.size); }
+  } else if(G.length===0){
+    if(oppWin && best.combo.group!=='T'){            // 用主牌将吃
+      const T=hand.filter(c=>isTrump(c)).sort((a,b)=>tval(a)-tval(b));
+      if(lead.type==='single' && T.length) { if(beats([T[0]])) chosen=[T[0]]; }
+      else if(lead.type==='pair'){ const tp=groupPairs(T).find(p=>beats(p)); if(tp) chosen=tp; }
+      else { const tt=tractorsOf(T,lead.size).find(t=>beats(t)); if(tt) chosen=tt; }
+    }
+    if(!chosen){ const pool=hand.slice().sort((a,b)=> mateWin?(pts(b)-pts(a)):(pts(a)-pts(b))||tval(a)-tval(b)); chosen=pool.slice(0,lead.size); }
+  } else {
+    const others=hand.filter(c=>!inGroup(c,lead.group)).sort((a,b)=> mateWin?(pts(b)-pts(a)):(pts(a)-pts(b))||tval(a)-tval(b));
+    chosen=[...G, ...others.slice(0,lead.size-G.length)];
+  }
+  if(!chosen || !validateFollow(chosen,hand,lead).ok) chosen=forcedFollow(hand,lead);
+  return chosen;
+}
+
+/* ===== 人类出牌 ===== */
+function onPlay(){ if(!(phase==='play'&&trickOrder[turnPos]===0)) return;
+  const sel=players[0].hand.filter(c=>selected.has(c.id));
+  if(!sel.length){ flash('请选择要出的牌'); return; }
+  if(turnPos===0){ const c=detectCombo(sel); if(!c){ flash('请出单张/对子/连对'); return; } }
+  else { const v=validateFollow(sel,players[0].hand,trick[0].combo); if(!v.ok){ flash(v.why); return; } }
+  selected.clear(); commit(0,sel);
+}
+function onHint(){ if(!(phase==='play'&&trickOrder[turnPos]===0)) return;
+  let cards;
+  if(turnPos===0) cards=aiLead(0); else cards=aiFollow(0);
+  selected=new Set(cards.map(c=>c.id)); renderHand();
+}
+
+/* ===== 结算 ===== */
+function endDeal(){
+  const def=1-declarerTeam; let d=teamPoints[def];
+  // 扣底翻倍: 闲家赢最后一墩
+  let kittyPts=kitty.reduce((s,c)=>s+pts(c),0), bonus=0;
+  if(lastTrickInfo && team(lastTrickInfo.winner)===def && kittyPts>0){
+    bonus=kittyPts * 2 * lastTrickInfo.size; d+=bonus;
+  }
+  const dealLevel=level; let body, title, win=false;
+  body=`闲家(${def===0?'你方':'对方'})得分：<b>${teamPoints[def]}</b>`+
+       (bonus?` ＋扣底翻倍 ${bonus}（底分${kittyPts}×${2*lastTrickInfo.size}）= <b>${d}</b>`:'')+`<br>底牌：${kitty.map(rankText).join(' ')||'无'}`;
+  let newTeam, newSeat, gain=0, who;
+  if(d<80){ who=declarerTeam; gain = d===0?3 : d<40?2 : 1; newTeam=declarerTeam; newSeat=(declarerSeat+2)%4; }
+  else { who=def; gain = d<120?0 : d<160?1 : d<200?2 : 3; newTeam=def; newSeat=(declarerSeat+1)%4; }
+  if(d<80 && dealLevel===14){ gameOver=true; win=true; }
+  if(!gameOver){ teamLevels[who]=Math.min(14, teamLevels[who]+gain); }
+  declarerTeam=newTeam; declarerSeat=newSeat;
+  const upTxt = who===0?'你方':'对方';
+  if(win){ title=(declarerTeam===0?'🏆 你方守住 A，获胜！':'😵 对方守住 A，你方失败'); }
+  else if(d<80) title=`庄家(${upTxt})守住，升 ${gain} 级 → ${rankText({rank:teamLevels[who]})}，继续坐庄`;
+  else if(gain===0) title=`闲家(${upTxt})达 ${d} 分，平台上台坐庄`;
+  else title=`闲家(${upTxt})达 ${d} 分，升 ${gain} 级并上台坐庄`;
+  showOverlay(title, body, ()=>{ if(gameOver) newGame(); else startDeal(); }, gameOver?'再来一局':'下一局');
+}
+
+/* ===== 通用 UI ===== */
+let logs=[]; function log(t){ logs.unshift(t); logs=logs.slice(0,9); document.getElementById('log').innerHTML=logs.join('<br>'); }
+function flash(t){ log('⚠ '+t); }
+function showOverlay(title,body,cb,btn){ document.getElementById('ovTitle').textContent=title;
+  document.getElementById('ovBody').innerHTML=body; const o=document.getElementById('overlay'); o.style.display='flex';
+  const b=document.getElementById('ovBtn'); b.textContent=btn||'继续'; b.onclick=()=>{ o.style.display='none'; cb(); }; }
+
+baseControls(); newGame();
+</script>
+</body>
+</html>
