@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>掼蛋 规则与实例</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    background:#f4f1e8; color:#222; line-height:1.7; }
+  header { background:linear-gradient(135deg,#0f5132,#2e8b57); color:#fff; padding:22px 20px; }
+  header h1 { margin:0; font-size:24px; }
+  header p { margin:6px 0 0; opacity:.9; font-size:14px; }
+  main { max-width:860px; margin:0 auto; padding:18px 16px 60px; }
+  h2 { color:#0f5132; border-bottom:2px solid #2e8b57; padding-bottom:6px; margin-top:34px; font-size:20px; }
+  h3 { color:#1d6b43; margin:20px 0 6px; font-size:16px; }
+  p,li { font-size:15px; }
+  .note { background:#fff7e0; border-left:4px solid #e0a800; padding:8px 12px; border-radius:6px; margin:10px 0; font-size:14px; }
+  .tip  { background:#e7f4ec; border-left:4px solid #2e8b57; padding:8px 12px; border-radius:6px; margin:10px 0; font-size:14px; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; background:#fff; border-radius:8px; overflow:hidden; }
+  th,td { border:1px solid #ddd; padding:8px 10px; text-align:left; font-size:14px; vertical-align:middle; }
+  th { background:#e7f4ec; }
+  .ex { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin:8px 0; }
+  .ex .lbl { font-size:13px; color:#666; min-width:84px; }
+  .row { display:inline-flex; gap:1px; }
+  .vs { font-weight:700; color:#d40000; font-size:18px; margin:0 8px; }
+  .win { color:#0f5132; font-weight:600; font-size:13px; }
+  /* cards */
+  .card { background:#fff; color:#222; border-radius:5px; border:1px solid #999;
+    width:38px; height:54px; display:inline-flex; flex-direction:column; align-items:center;
+    justify-content:flex-start; font-weight:700; padding-top:3px; box-shadow:0 1px 2px rgba(0,0,0,.25);
+    position:relative; }
+  .card.red { color:#d40000; }
+  .card .r { font-size:15px; line-height:1; }
+  .card .s { font-size:14px; line-height:1; }
+  .card.wild::after{ content:"百搭"; position:absolute; bottom:1px; font-size:7px; color:#fff;
+    background:#d40000; border-radius:3px; padding:0 2px; font-weight:400; }
+  a.back { display:inline-block; margin-top:16px; background:#2e8b57; color:#fff; text-decoration:none;
+    padding:10px 20px; border-radius:22px; font-weight:600; }
+  code { background:#eee; padding:1px 5px; border-radius:4px; font-size:13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>掼蛋 · 规则与实例</h1>
+  <p>下面每条规则都用真实的牌来演示，看一遍就会玩。</p>
+</header>
+<main>
+
+  <h2>1. 目标与阵营</h2>
+  <p>4 人用 <b>2 副牌（共 108 张）</b>，每人发 27 张。</p>
+  <ul>
+    <li><b>你</b> 和 <b>对家（队友）</b> 是一队；<b>左家</b> 和 <b>右家</b> 是另一队。</li>
+    <li>谁先把手牌出完谁是「<b>头游</b>」。两队比谁先「打过 A」，先过 A 的一队获胜。</li>
+  </ul>
+
+  <h2>2. 级牌（主牌）—— 本游戏的核心</h2>
+  <p>每局有一个「级牌」（开局是 <code>2</code>，赢一局就升级，如升到 7、J、A…）。当前级牌显示在游戏左上角。</p>
+  <p>级牌很特殊：<b>它的大小被抬高，仅次于王。</b> 单张从小到大的完整顺序是：</p>
+  <div class="ex"><span class="lbl">单张大小</span><span id="orderRow"></span></div>
+  <div class="note">例：当级牌是 <b>7</b> 时，任意一张 <b>7</b> 都比 A 还大，仅比小王/大王小。其他牌（2~A）顺序不变。</div>
+
+  <h2>3. 红桃级牌 = 百搭（逢人配）</h2>
+  <p>级牌花色为<b>红桃</b>的那两张，是「百搭」，可以当作<b>除大小王以外的任意一张牌</b>使用。</p>
+  <div class="ex"><span class="lbl">级牌是2时</span><span id="wildRow"></span><span style="font-size:13px;color:#666;">←这两张红桃2是百搭</span></div>
+  <div class="ex"><span class="lbl">凑对子</span><span id="wildPair"></span><span class="win">百搭当作 5，组成「一对 5」</span></div>
+  <div class="ex"><span class="lbl">补顺子</span><span id="wildStr"></span><span class="win">百搭当作 6，组成顺子 5-6-7-8-9</span></div>
+  <div class="note">百搭不能当大王/小王，也不能用来凑「四王炸」。</div>
+
+  <h2>4. 牌型一览（实例）</h2>
+  <p>轮到你出牌时，可以出下列任意一种牌型；别人跟牌必须出<b>同一种牌型且更大</b>，或者用炸弹。</p>
+  <table id="typeTable"></table>
+
+  <h2>5. 比大小</h2>
+  <h3>① 同种牌型比大小</h3>
+  <p>张数/结构相同，比关键点数。对子比对子、顺子比顶张、三带二比三条的点数……</p>
+  <div class="ex"><span class="lbl">对子</span><span id="cmpPair"></span></div>
+  <div class="ex"><span class="lbl">顺子</span><span id="cmpStr"></span></div>
+
+  <h3>② 炸弹通杀普通牌型</h3>
+  <p>任何炸弹都能压任意非炸弹的牌型（不限张数）。</p>
+  <div class="ex"><span class="lbl"></span><span id="cmpBomb"></span></div>
+
+  <h3>③ 炸弹之间的大小</h3>
+  <p>从小到大：<b>4张炸 &lt; 5张炸 &lt; 同花顺 &lt; 6张炸 &lt; 7张炸 &lt; 8张炸 &lt; 四大王(天王炸)</b>。张数多的更大；张数相同比点数。</p>
+  <div class="ex"><span class="lbl">张数优先</span><span id="cmpBomb2"></span></div>
+  <div class="ex"><span class="lbl">级牌更大</span><span id="cmpBomb3"></span></div>
+  <div class="tip">提示：级牌也会抬高炸弹点数。例如级牌是 7 时，四个 7 的炸弹比四个 A 的炸弹还大。</div>
+
+  <h2>6. 一墩牌怎么打</h2>
+  <ul>
+    <li>由「先出」的人自由出一手牌，其余人按逆时针轮流：要么出更大的<b>同型牌</b>（或炸弹）压上，要么<b>不出</b>。</li>
+    <li>当其他人都「不出」时，最后压牌的人赢得这一墩，<b>清台</b>，由他重新自由出牌。</li>
+    <li>谁先出完手牌就「跑掉」，剩下的人继续打，决出名次。</li>
+  </ul>
+  <div class="tip"><b>配合队友：</b>如果正压着这一墩的是你的队友，通常应当「不出」，把这一墩让给队友（电脑队友也会这么配合你）。</div>
+
+  <h2>7. 进贡 / 还贡</h2>
+  <p>除第一局外，每局开始要先进贡，规则按上一局名次定：</p>
+  <ul>
+    <li><b>双下</b>（输的一队拿了三游+四游）：四游把<b>最大的一张</b>进贡给头游，三游进贡给二游。</li>
+    <li><b>单下</b>（输的一队只垫了四游）：只有四游把最大的一张进贡给头游。</li>
+    <li><b>进贡牌</b>＝手里除红桃级牌(百搭)外最大的一张（大王最大）。</li>
+    <li><b>还贡</b>：收到贡牌的人，回一张<b>不大于 10</b> 的牌给对方。</li>
+    <li><b>抗贡</b>：如果进贡方手里有<b>两张大王</b>，可以拒绝进贡。</li>
+    <li>进贡牌最大的那个进贡者<b>先出牌</b>（抗贡时由头游先出）。</li>
+  </ul>
+  <div class="ex"><span class="lbl">进贡示例</span><span id="tribGive"></span><span class="win">四游把最大的 大王 进贡给头游</span></div>
+  <div class="ex"><span class="lbl">还贡示例</span><span id="tribBack"></span><span class="win">头游回一张 ≤10 的牌（如 4）给对方</span></div>
+  <div class="note">轮到<b>你</b>还贡时：点选一张不大于 10 的牌，再按「出牌」即可。</div>
+
+  <h2>8. 升级与胜负</h2>
+  <p>头游所在的队伍根据队友名次升级：</p>
+  <table>
+    <tr><th>队友名次</th><th>升级</th></tr>
+    <tr><td>二游（双上）</td><td>升 3 级</td></tr>
+    <tr><td>三游</td><td>升 2 级</td></tr>
+    <tr><td>四游</td><td>升 1 级</td></tr>
+  </table>
+  <p>级牌按 <code>2 → 3 → … → 10 → J → Q → K → A</code> 上升。率先<b>打过 A</b> 的一队获胜。</p>
+
+  <h2>9. 按钮说明</h2>
+  <ul>
+    <li><b>出牌</b>：把当前选中的牌打出去。</li>
+    <li><b>不出</b>：本墩放弃（轮到你压牌时才可用）。</li>
+    <li><b>提示</b>：自动帮你选一手能出的牌。</li>
+    <li><b>理牌</b>：重新整理手牌顺序。</li>
+  </ul>
+
+  <a class="back" href="index.html">← 返回游戏</a>
+</main>
+
+<script>
+const SYM={S:'♠',H:'♥',C:'♣',D:'♦'};
+const RED={H:1,D:1};
+function card(spec, wild){            // spec: 'S7','H10','BJ','SJ'
+  const el=document.createElement('div');
+  let r,s,red=false;
+  if(spec==='BJ'){ s='王'; r='大'; red=true; }
+  else if(spec==='SJ'){ s='王'; r='小'; red=true; }
+  else { s=spec[0]; let n=spec.slice(1); red=RED[s]; s=SYM[s];
+    r=({['11']:'J','12':'Q','13':'K','14':'A'})[n]||n; }
+  el.className='card'+(red?' red':'')+(wild?' wild':'');
+  el.innerHTML=`<div class="r">${r}</div><div class="s">${s}</div>`;
+  return el;
+}
+function row(specs, wildIdx){
+  const r=document.createElement('span'); r.className='row';
+  specs.forEach((sp,i)=>r.appendChild(card(sp, wildIdx&&wildIdx.includes(i))));
+  return r;
+}
+function put(id, node){ const e=document.getElementById(id); if(e) e.appendChild(node); }
+function vs(){ const s=document.createElement('span'); s.className='vs'; s.textContent='＞'; return s; }
+function winTxt(t){ const s=document.createElement('span'); s.className='win'; s.textContent=t; return s; }
+
+// 单张顺序 (级牌=7 示例)
+put('orderRow', row(['S2','S3','S4','S5','S6','S8','S9','S10','S11','S12','S13','S14','S7','SJ','BJ']));
+// 百搭
+put('wildRow', row(['H2','H2'],[0,1]));
+put('wildPair', row(['H2','S5'],[0]));
+put('wildStr', row(['S5','H2','C7','D8','S9'],[1]));
+
+// 牌型表
+const types=[
+  ['单张','一张牌',['S9']],
+  ['对子','两张同点',['S7','H7']],
+  ['三张','三张同点',['S5','H5','C5']],
+  ['三带二','三张同点 + 一对',['S9','H9','C9','D4','S4']],
+  ['顺子','五张连续单牌',['S5','H6','C7','D8','S9']],
+  ['三连对（木板）','三组连续的对子',['S3','H3','S4','H4','S5','H5']],
+  ['钢板','两组连续的三张',['S6','H6','C6','S7','H7','C7']],
+  ['炸弹','四张及以上同点',['S8','H8','C8','D8']],
+  ['同花顺','同花色的五张连续',['S6','S7','S8','S9','S10']],
+  ['四大王（天王炸）','两小王+两大王，最大',['SJ','SJ','BJ','BJ']],
+];
+const tb=document.getElementById('typeTable');
+tb.innerHTML='<tr><th>牌型</th><th>说明</th><th>实例</th></tr>';
+types.forEach(([n,d,c])=>{ const tr=document.createElement('tr');
+  const t1=document.createElement('td'); t1.innerHTML='<b>'+n+'</b>';
+  const t2=document.createElement('td'); t2.textContent=d;
+  const t3=document.createElement('td'); t3.appendChild(row(c));
+  tr.append(t1,t2,t3); tb.appendChild(tr); });
+
+// 比大小
+const p1=document.getElementById('cmpPair');
+p1.append(row(['S9','H9']),vs(),row(['S7','C7']),winTxt('一对9 大于 一对7'));
+const s1=document.getElementById('cmpStr');
+s1.append(row(['S6','H7','C8','D9','S10']),vs(),row(['S5','H6','C7','D8','S9']),winTxt('顶张10 大于 顶张9'));
+const b1=document.getElementById('cmpBomb');
+b1.append(row(['S4','H4','C4','D4']),vs(),row(['S14','H14']),winTxt('炸弹 压 一对A'));
+const b2=document.getElementById('cmpBomb2');
+b2.append(row(['S3','H3','C3','D3','S3']),vs(),row(['S14','H14','C14','D14']),winTxt('5张炸(3) 大于 4张炸(A)'));
+const b3=document.getElementById('cmpBomb3');
+b3.append(row(['S7','H7','C7','D7']),vs(),row(['S14','H14','C14','D14']),winTxt('级牌=7时，四个7 大于 四个A'));
+
+// 进贡
+document.getElementById('tribGive').appendChild(row(['BJ']));
+document.getElementById('tribBack').appendChild(row(['C4']));
+</script>
+</body>
+</html>
