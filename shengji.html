@@ -263,8 +263,34 @@ const Sound = {
     } catch (e) {
       console.warn("Web Audio API error:", e);
     }
+  },
+  speak(text, seatIndex = 0) {
+    this.init();
+    if (this.muted || !window.speechSynthesis) return;
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'zh-CN';
+      const rates = [1.15, 1.25, 1.1, 1.2];
+      const pitches = [1.05, 0.95, 1.15, 0.9];
+      utterance.rate = rates[seatIndex % 4];
+      utterance.pitch = pitches[seatIndex % 4];
+      
+      const voices = window.speechSynthesis.getVoices().filter(v => v.lang.includes('zh'));
+      if (voices.length > 0) {
+        utterance.voice = voices[seatIndex % voices.length];
+      }
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.warn("Speech synthesis error:", e);
+    }
   }
 };
+if (typeof window !== 'undefined' && window.speechSynthesis) {
+  if (window.speechSynthesis.onvoiceschanged !== undefined) {
+    window.speechSynthesis.onvoiceschanged = () => {};
+  }
+}
 window.addEventListener('click', () => Sound.init(), { once: true });
 window.addEventListener('touchstart', () => Sound.init(), { once: true });
 
@@ -434,6 +460,7 @@ function aiDeclare(){
 function chooseTrump(s){ trumpSuit=s; level=teamLevels[declarerTeam];
   players.forEach(p=>sortHand(p.hand));
   log(`主牌定为 ${trumpSuit==='NT'?'无主':SUIT_NAME[trumpSuit]}`);
+  Sound.speak("亮" + (s === 'NT' ? '无主' : SUIT_NAME[s]), declarerSeat);
   // 庄家拿底牌
   const d=players[declarerSeat]; d.hand.push(...kitty); kitty=[]; sortHand(d.hand);
   phase='bury'; beginBury();
@@ -450,12 +477,14 @@ function confirmBury(){
   if(selected.size!==8){ flash('请正好选择 8 张'); return; }
   const d=players[0]; kitty=d.hand.filter(c=>selected.has(c.id));
   d.hand=d.hand.filter(c=>!selected.has(c.id)); selected.clear(); sortHand(d.hand);
+  Sound.speak("埋底", 0);
   startPlay();
 }
 function aiBury(){ const d=players[declarerSeat];
   const cand=d.hand.slice().sort((a,b)=> (isTrump(a)-isTrump(b)) || (pts(a)-pts(b)) || tval(a)-tval(b));
   kitty=cand.slice(0,8); const ids=new Set(kitty.map(c=>c.id));
   d.hand=d.hand.filter(c=>!ids.has(c.id)); sortHand(d.hand);
+  Sound.speak("埋底", declarerSeat);
   startPlay();
 }
 
@@ -473,10 +502,60 @@ function takeTurn(){
 function updateControls(){ const my=phase==='play'&&trickOrder[turnPos]===0&&!gameOver;
   const bp=document.getElementById('bPlay'), bh=document.getElementById('bHint');
   if(bp) bp.disabled=!my; if(bh) bh.disabled=!my; }
+function rankVoiceName(v, level) {
+  if (v === 15) v = level;
+  if (v === 18) return '四王';
+  if (v === 17) return '大王';
+  if (v === 16) return '小王';
+  if (v === 14) return 'A';
+  if (v === 13) return 'K';
+  if (v === 12) return '圈';
+  if (v === 11) return '钩';
+  if (v === 10) return '十';
+  if (v === 9) return '九';
+  if (v === 8) return '八';
+  if (v === 7) return '七';
+  if (v === 6) return '六';
+  if (v === 5) return '五';
+  if (v === 4) return '四';
+  if (v === 3) return '三';
+  if (v === 2) return '二';
+  return '' + v;
+}
+function getShengjiPlaySpeech(cards, turnPos, leadCombo) {
+  if (turnPos === 0) {
+    const combo = detectCombo(cards);
+    if (combo) {
+      if (combo.type === 'single') {
+        return "单" + rankVoiceName(cards[0].rank, level);
+      } else if (combo.type === 'pair') {
+        return "对" + rankVoiceName(cards[0].rank, level);
+      } else if (combo.type === 'tractor') {
+        return "拖拉机";
+      }
+    }
+    return "甩牌";
+  } else {
+    if (leadCombo && leadCombo.group !== 'T' && cards.every(isTrump)) {
+      return "毙了";
+    }
+    if (cards.length === 1 && (isTrump(cards[0]) || cards[0].rank === 14)) {
+      return rankVoiceName(cards[0].rank, level);
+    }
+    return "";
+  }
+}
 function commit(seat,cards){
   const p=players[seat]; const ids=new Set(cards.map(c=>c.id));
   p.hand=p.hand.filter(c=>!ids.has(c.id)); p.lastShown=cards.slice();
   const combo = turnPos===0 ? detectCombo(cards) : (detectCombo(cards)||null);
+  
+  const leadCombo = trick[0] ? trick[0].combo : null;
+  const speechText = getShengjiPlaySpeech(cards, turnPos, leadCombo);
+  if (speechText) {
+    Sound.speak(speechText, seat);
+  }
+
   trick.push({seat,cards:cards.slice(),combo: turnPos===0?combo:detectCombo(cards)});
   log(`${NAMES[seat]} 出 ${cards.map(rankText).join('')}`);
   Sound.play('play');

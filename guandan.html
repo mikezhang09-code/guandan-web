@@ -315,8 +315,34 @@ const Sound = {
     } catch (e) {
       console.warn("Web Audio API error:", e);
     }
+  },
+  speak(text, seatIndex = 0) {
+    this.init();
+    if (this.muted || !window.speechSynthesis) return;
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'zh-CN';
+      const rates = [1.15, 1.25, 1.1, 1.2];
+      const pitches = [1.05, 0.95, 1.15, 0.9];
+      utterance.rate = rates[seatIndex % 4];
+      utterance.pitch = pitches[seatIndex % 4];
+      
+      const voices = window.speechSynthesis.getVoices().filter(v => v.lang.includes('zh'));
+      if (voices.length > 0) {
+        utterance.voice = voices[seatIndex % voices.length];
+      }
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.warn("Speech synthesis error:", e);
+    }
   }
 };
+if (typeof window !== 'undefined' && window.speechSynthesis) {
+  if (window.speechSynthesis.onvoiceschanged !== undefined) {
+    window.speechSynthesis.onvoiceschanged = () => {};
+  }
+}
 window.addEventListener('click', () => Sound.init(), { once: true });
 window.addEventListener('touchstart', () => Sound.init(), { once: true });
 
@@ -530,10 +556,12 @@ function runTribute(){
                   : [{p:order[3],r:order[0]}];
   const bigJokers=pairs.reduce((s,x)=>s+players[x.p].hand.filter(c=>c.joker==='B').length,0);
   if(bigJokers>=2){                                          // 抗贡
+    Sound.speak("抗贡！", order[3]);
     showTributeInfo(['抗贡！进贡方持有两张大王，本局免进贡'],()=>finishTribute(order[0]));
     return;
   }
   tributeMsgs=[]; const info=[];
+  Sound.speak("进贡", order[3]);
   for(const x of pairs){
     const ph=players[x.p].hand;
     const card=ph.filter(c=>!isWild(c,currentLevel)).sort((a,b)=>rvCard(b,currentLevel)-rvCard(a,currentLevel))[0];
@@ -554,6 +582,7 @@ function processReturns(){
     if(pr.receiver===0){                                     // 轮到你还贡
       returnMode=pr; renderAll(); updateButtons();
       log(`请选一张不大于10的牌还贡给 ${NAMES[pr.payer]}，再按「出牌」`);
+      Sound.speak("请还贡", 0);
       return;
     }
     autoReturn(pr); retIndex++;
@@ -608,6 +637,54 @@ function afterAction(){
   }
   currentPlayer=nextActive(currentPlayer); renderAll(); step();
 }
+function rankVoiceName(v, level) {
+  if (v === 15) v = level;
+  if (v === 18) return '四王';
+  if (v === 17) return '大王';
+  if (v === 16) return '小王';
+  if (v === 14) return 'A';
+  if (v === 13) return 'K';
+  if (v === 12) return '圈';
+  if (v === 11) return '钩';
+  if (v === 10) return '十';
+  if (v === 9) return '九';
+  if (v === 8) return '八';
+  if (v === 7) return '七';
+  if (v === 6) return '六';
+  if (v === 5) return '五';
+  if (v === 4) return '四';
+  if (v === 3) return '三';
+  if (v === 2) return '二';
+  return '' + v;
+}
+function getGuandanPlaySpeech(desc, cards, level) {
+  const t = desc.type;
+  const v = desc.value;
+  switch (t) {
+    case 'single':
+      return rankVoiceName(v, level);
+    case 'pair':
+      return "对" + rankVoiceName(v, level);
+    case 'triple':
+      return "三个" + rankVoiceName(v, level);
+    case 'fullhouse':
+      return "三带二";
+    case 'straight':
+      return "顺子";
+    case 'tube':
+      return "三连对";
+    case 'plate':
+      return "钢板";
+    case 'bomb':
+      return desc.len + "炸";
+    case 'straightflush':
+      return "同花顺";
+    case 'fourjokers':
+      return "四王炸";
+    default:
+      return descText(desc);
+  }
+}
 function applyPlay(idx,cards,desc){
   const p=players[idx]; const ids=new Set(cards.map(c=>c.id));
   p.hand=p.hand.filter(c=>!ids.has(c.id));
@@ -616,9 +693,27 @@ function applyPlay(idx,cards,desc){
   p.lastShown=cards.slice();
   log(NAMES[idx]+' 出 '+descText(desc));
   Sound.play('play');
+  
+  let speechText = getGuandanPlaySpeech(desc, cards, currentLevel);
+  if (p.hand.length === 1) {
+    speechText += "，剩一张";
+  } else if (p.hand.length === 2) {
+    speechText += "，剩两张";
+  }
+  Sound.speak(speechText, idx);
+
   if(p.hand.length===0){ p.finished=true; finishedOrder.push(p); log('🎉 '+NAMES[idx]+' 出完!'); }
 }
-function applyPass(idx){ passed.add(idx); players[idx].lastShown='pass'; log(NAMES[idx]+' 不出'); Sound.play('pass'); }
+function applyPass(idx){
+  passed.add(idx);
+  players[idx].lastShown='pass';
+  log(NAMES[idx]+' 不出');
+  Sound.play('pass');
+  
+  const passPhrases = ["不出", "不要", "要不起", "过"];
+  const phrase = passPhrases[Math.floor(Math.random() * passPhrases.length)];
+  Sound.speak(phrase, idx);
+}
 
 function bombCardIds(hand){                       // 属于炸弹的牌(不可拆)
   const ids=new Set(), byRank={}, jk={S:[],B:[]};
