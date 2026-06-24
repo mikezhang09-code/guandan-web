@@ -32,6 +32,18 @@ TTS_URL = "https://tsn.baidu.com/text2audio"
 VALUES = ["二", "三", "四", "五", "六", "七", "八", "九", "十",
           "j", "q", "k", "a", "小王", "大王"]
 
+# 个别短语在清单里的 key 保持不变(运行时按 key 查文件), 但合成时改用别的发音文本。
+# 例: 扑克 A 应念字母音"诶(ēi)", 而百度会把小写 "a" 当拼音读成"啊", 故替换。
+SPOKEN_TEXT = {"a": "诶"}
+
+
+def spoken(text):
+    """把短语里的 'a' 替换成发音用的 '诶', 其余原样。"""
+    out = text
+    for k, v in SPOKEN_TEXT.items():
+        out = out.replace(k, v)
+    return out
+
 
 def build_phrases():
     """枚举两个游戏会播报的全部固定短语 (顺序即文件索引, 不要随意改顺序)。"""
@@ -134,7 +146,7 @@ def main():
                 continue
             for attempt in range(3):
                 try:
-                    audio = synth(token, text, per)
+                    audio = synth(token, spoken(text), per)
                     with open(path, "wb") as f:
                         f.write(audio)
                     total += 1
