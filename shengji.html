@@ -20,9 +20,11 @@
   #seat1 { top:40%; left:6px; transform:translateY(-50%); width:120px; }
   #seat3 { top:40%; right:6px; transform:translateY(-50%); width:120px; }
   #seat0 { bottom:150px; left:50%; transform:translateX(-50%); }
-  .played { margin-top:4px; min-height:54px; display:flex; justify-content:center; gap:1px; flex-wrap:wrap; }
+  .played { margin-top:4px; min-height:54px; display:flex; justify-content:center; gap:1px; flex-wrap:wrap; max-width:86vw; }
+  /* 上/下家(居中)限宽换行 */
+  #seat2 .played, #seat0 .played { max-width:340px; }
   /* 左右家固定宽度, 出多张牌时在框内换行, 避免溢出屏幕看不见 */
-  #seat1 .played, #seat3 .played { width:116px; }
+  #seat1 .played, #seat3 .played { width:116px; max-width:116px; }
   #seat1 .played { justify-content:flex-start; }
   #seat3 .played { justify-content:flex-end; }
   .played.win { filter:drop-shadow(0 0 6px #ffd54a); }
@@ -641,7 +643,8 @@ function takeTurn(){
   const seat=trickOrder[turnPos];
   renderAll(); updateControls();
   if(seat===0) return;                 // 等人类
-  setTimeout(()=>{ const cards = turnPos===0? aiLead(seat) : aiFollow(seat); commit(seat,cards); }, 600);
+  // 开声音时放慢节奏, 让"对+花色+点数"的语音念完再下一手; 静音时保持轻快
+  setTimeout(()=>{ const cards = turnPos===0? aiLead(seat) : aiFollow(seat); commit(seat,cards); }, Sound.muted?550:1000);
 }
 function updateControls(){ const my=phase==='play'&&trickOrder[turnPos]===0&&!gameOver;
   const bp=document.getElementById('bPlay'), bh=document.getElementById('bHint');
@@ -719,7 +722,7 @@ function resolveTrick(){
   Sound.play(wt === team(0) ? 'win' : 'pass');
   renderStatus();
   const done = players.every(pl=>pl.hand.length===0);
-  setTimeout(()=>{ if(done) endDeal(); else startTrick(w); }, 900);
+  setTimeout(()=>{ if(done) endDeal(); else startTrick(w); }, Sound.muted?900:1300);
 }
 
 /* ===== AI ===== */
