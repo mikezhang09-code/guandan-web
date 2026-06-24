@@ -642,7 +642,8 @@ function aiBury(){ const d=players[declarerSeat];
 /* ===== 出牌流程 ===== */
 function startPlay(){ phase='play'; baseControls(); leadSeat=declarerSeat; startTrick(leadSeat); }
 function startTrick(lead){ trick=[]; trickOrder=[lead,(lead+1)%4,(lead+2)%4,(lead+3)%4]; turnPos=0;
-  players.forEach(p=>p.lastShown=null); renderAll(); takeTurn(); }
+  // 不在这里清牌: 让上一墩四家的牌一直留到新领出那刻才清, 方便看清最后出牌的那家
+  renderAll(); takeTurn(); }
 function takeTurn(){
   if(turnPos>=4){ return resolveTrick(); }
   const seat=trickOrder[turnPos];
@@ -698,6 +699,7 @@ function getShengjiPlaySpeech(cards, turnPos, leadCombo) {
   return [];
 }
 function commit(seat,cards){
+  if(turnPos===0) players.forEach(q=>q.lastShown=null);   // 新一墩领出时, 才清掉上一墩的展示
   const p=players[seat]; const ids=new Set(cards.map(c=>c.id));
   p.hand=p.hand.filter(c=>!ids.has(c.id)); p.lastShown=cards.slice();
   let combo;
