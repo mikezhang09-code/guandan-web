@@ -17,25 +17,25 @@
   .seat.turn .name { background:#ffcc00; color:#222; box-shadow:0 0 12px #ffcc00; }
   .seat .count { font-size:12px; opacity:.85; margin-top:2px; }
   #seat2 { top:8px; left:50%; transform:translateX(-50%); }
-  #seat1 { top:40%; left:6px; transform:translateY(-50%); width:120px; }
-  #seat3 { top:40%; right:6px; transform:translateY(-50%); width:120px; }
+  #seat1 { top:34%; left:10px; transform:translateY(-50%); }
+  #seat3 { top:34%; right:10px; transform:translateY(-50%); }
   #seat0 { bottom:150px; left:50%; transform:translateX(-50%); }
-  .played { margin-top:4px; min-height:54px; display:flex; justify-content:center; gap:1px; flex-wrap:wrap; max-width:86vw; }
-  /* 上/下家(居中)限宽换行 */
-  #seat2 .played, #seat0 .played { max-width:340px; }
-  /* 左右家固定宽度, 出多张牌时在框内换行, 避免溢出屏幕看不见 */
-  #seat1 .played, #seat3 .played { width:116px; max-width:116px; }
-  #seat1 .played { justify-content:flex-start; }
-  #seat3 .played { justify-content:flex-end; }
-  .played.win { filter:drop-shadow(0 0 6px #ffd54a); }
+  /* 出牌区集中到牌桌中央(各家朝中间打), 一眼看清整体出牌 */
+  .played { position:absolute; min-height:56px; display:flex; justify-content:center;
+    gap:2px; flex-wrap:wrap; max-width:min(230px,42vw); z-index:3; }
+  #play2 { top:23%; left:50%; transform:translateX(-50%); }
+  #play0 { bottom:168px; left:50%; transform:translateX(-50%); }
+  #play1 { top:51%; left:24%; transform:translate(-50%,-50%); }
+  #play3 { top:51%; right:24%; transform:translate(50%,-50%); }
+  .played.win { filter:drop-shadow(0 0 8px #ffd54a); }
   .card { background:#fff; color:#222; border-radius:6px; border:1px solid #999;
     display:inline-flex; flex-direction:column; align-items:center; justify-content:flex-start;
     font-weight:700; position:relative; box-shadow:0 1px 3px rgba(0,0,0,.4); }
   .card.red { color:#d40000; }
   .card.tr { background:#fff7d6; border-color:#e0a800; }
   .card.pt::before { content:"·"; position:absolute; top:0; right:3px; color:#0a8; font-size:16px; }
-  .mini { width:32px; height:48px; font-size:13px; padding-top:3px; }
-  .mini .r { font-size:14px; } .mini .s { font-size:13px; }
+  .mini { width:40px; height:60px; font-size:16px; padding-top:4px; }
+  .mini .r { font-size:18px; } .mini .s { font-size:16px; }
   #hand-area { position:absolute; bottom:0; left:0; right:0; padding:6px 8px 10px;
     background:linear-gradient(to top, rgba(0,0,0,.45), transparent); }
   #hand { display:flex; justify-content:center; flex-wrap:wrap; min-height:92px; }
@@ -67,10 +67,15 @@
   <div id="status"></div>
   <div id="log"></div>
   <div id="center-hint">升级 · 拖拉机</div>
-  <div class="seat" id="seat2"><span class="name">对家(队友)</span><div class="count"></div><div class="played"></div></div>
-  <div class="seat" id="seat1"><span class="name">左家</span><div class="count"></div><div class="played"></div></div>
-  <div class="seat" id="seat3"><span class="name">右家</span><div class="count"></div><div class="played"></div></div>
-  <div class="seat" id="seat0"><div class="played"></div></div>
+  <div class="seat" id="seat2"><span class="name">对家(队友)</span><div class="count"></div></div>
+  <div class="seat" id="seat1"><span class="name">左家</span><div class="count"></div></div>
+  <div class="seat" id="seat3"><span class="name">右家</span><div class="count"></div></div>
+  <div class="seat" id="seat0"></div>
+  <!-- 出牌区: 集中在牌桌中央 -->
+  <div class="played" id="play2"></div>
+  <div class="played" id="play1"></div>
+  <div class="played" id="play3"></div>
+  <div class="played" id="play0"></div>
 
   <div id="hand-area">
     <div id="hand"></div>
@@ -468,7 +473,7 @@ function renderSeat(i){ const seat=document.getElementById('seat'+i), p=players[
   seat.classList.toggle('turn', phase==='play'&&trickOrder[turnPos]===i&&!gameOver);
   const nm=seat.querySelector('.name'); if(nm) nm.classList.toggle('dealer', i===declarerSeat);
   if(i!==0) seat.querySelector('.count').textContent='剩 '+p.hand.length+' 张';
-  const pl=seat.querySelector('.played'); pl.innerHTML=''; pl.classList.remove('win');
+  const pl=document.getElementById('play'+i); pl.innerHTML=''; pl.classList.remove('win');
   if(Array.isArray(p.lastShown)) p.lastShown.forEach(c=>pl.appendChild(cardEl(c,'mini'))); }
 function renderHand(){ const h=document.getElementById('hand'); h.innerHTML='';
   players[0].hand.forEach(c=>{ const el=cardEl(c); if(selected.has(c.id)) el.classList.add('sel');
@@ -716,7 +721,7 @@ function resolveTrick(){
   const w=trickWinner(); const wt=team(w);
   let p=0; trick.forEach(t=>t.cards.forEach(c=>p+=pts(c)));
   teamPoints[wt]+=p;
-  document.querySelector('#seat'+w+' .played').classList.add('win');
+  document.getElementById('play'+w).classList.add('win');
   lastTrickInfo={winner:w, size:trick[0].cards.length};
   log(`${NAMES[w]} 赢墩` + (p?`，得 ${p} 分`:''));
   Sound.play(wt === team(0) ? 'win' : 'pass');
