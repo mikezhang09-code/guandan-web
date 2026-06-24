@@ -17,11 +17,12 @@
   .seat.turn .name { background:#ffcc00; color:#222; box-shadow:0 0 12px #ffcc00; }
   .seat .count { font-size:12px; opacity:.85; margin-top:2px; }
   #seat2 { top:8px; left:50%; transform:translateX(-50%); }
-  #seat1 { top:40%; left:10px; transform:translateY(-50%); }
-  #seat3 { top:40%; right:10px; transform:translateY(-50%); }
+  #seat1 { top:40%; left:6px; transform:translateY(-50%); width:120px; }
+  #seat3 { top:40%; right:6px; transform:translateY(-50%); width:120px; }
   #seat0 { bottom:150px; left:50%; transform:translateX(-50%); }
-  .played { margin-top:4px; min-height:54px; display:flex; justify-content:center; gap:1px; flex-wrap:wrap; max-width:46vw; }
-  /* 左右家出多张牌时靠内侧对齐, 避免溢出到屏幕外看不见 */
+  .played { margin-top:4px; min-height:54px; display:flex; justify-content:center; gap:1px; flex-wrap:wrap; }
+  /* 左右家固定宽度, 出多张牌时在框内换行, 避免溢出屏幕看不见 */
+  #seat1 .played, #seat3 .played { width:116px; }
   #seat1 .played { justify-content:flex-start; }
   #seat3 .played { justify-content:flex-end; }
   .played.win { filter:drop-shadow(0 0 6px #ffd54a); }
