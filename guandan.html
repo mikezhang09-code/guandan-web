@@ -522,7 +522,7 @@ function genMoves(hand,level){
 
 /* ============================ 游戏状态 ============================ */
 const NAMES=['你','左家','对家','右家'];
-let players=[], currentLevel=2, teamLevels=[2,2];
+let players=[], currentLevel=2, teamLevels=[2,2], aFails=[0,0];  // aFails: 各队"打A未过"次数(三打A)
 let currentPlayer=0, lastPlay=null, passed=new Set(), finishedOrder=[], gameOver=false;
 let selected=new Set();
 let prevOrder=null;                          // 上一局名次(idx数组)，决定进贡
@@ -531,7 +531,7 @@ const team=i=>i%2;
 function cardName(c){ return c.joker?rankText(c):rankText(c)+SUIT_SYM[c.suit]; }
 
 function newGame(){
-  teamLevels=[2,2]; currentLevel=2; gameOver=false; prevOrder=null;
+  teamLevels=[2,2]; currentLevel=2; aFails=[0,0]; gameOver=false; prevOrder=null;
   startDeal();
 }
 function startDeal(){
@@ -543,7 +543,7 @@ function startDeal(){
   lastPlay=null; passed.clear(); finishedOrder=[]; selected.clear();
   returnMode=null; pendingReturns=[]; retIndex=0; tributeMsgs=[];
   log('新一局开始，级牌 '+valueName(currentLevel));
-  if(!prevOrder){ currentPlayer=0; renderAll(); step(); }   // 首局无进贡
+  if(!prevOrder){ currentPlayer=Math.floor(Math.random()*4); log('首局由 '+NAMES[currentPlayer]+' 先出'); renderAll(); step(); }   // 首局无进贡, 随机先出
   else runTribute();
 }
 
@@ -614,6 +614,11 @@ function nextActive(i){ let j=(i+1)%4; let g=0; while(players[j].finished && g<4
 function step(){
   if(gameOver) return;
   const active=players.filter(p=>!p.finished);
+  // 双下提前结束: 头游+二游同队即本局胜负已定, 剩余两家按手牌数定三/四游
+  if(finishedOrder.length>=2 && team(finishedOrder[0].idx)===team(finishedOrder[1].idx)){
+    active.sort((a,b)=>a.hand.length-b.hand.length).forEach(p=>{ p.finished=true; finishedOrder.push(p); });
+    endDeal(); return;
+  }
   if(active.length<=1){ if(active.length===1){ active[0].finished=true; finishedOrder.push(active[0]); } endDeal(); return; }
   if(players[currentPlayer].finished){ currentPlayer=nextActive(currentPlayer); return step(); }
   if(currentPlayer===0){ renderAll(); updateButtons(); return; }
@@ -630,7 +635,12 @@ function afterAction(){
     const others=players.filter(p=>!p.finished && p.idx!==lastPlay.player);
     if(others.every(p=>passed.has(p.idx))){
       let leader=lastPlay.player;
-      if(players[leader].finished) leader=nextActive(leader);
+      if(players[leader].finished){
+        // 出完牌者赢得本轮，出牌权应交给其队友(对家)继续交战，
+        // 队友也出完才轮到下家——不能把胜利果实让给对方
+        const partner=(leader+2)%4;
+        leader = players[partner].finished ? nextActive(leader) : partner;
+      }
       lastPlay=null; passed.clear(); players.forEach(p=>p.lastShown=null);
       currentPlayer=leader; renderAll(); return step();
     }
@@ -642,10 +652,10 @@ function rankVoiceName(v, level) {
   if (v === 18) return '四王';
   if (v === 17) return '大王';
   if (v === 16) return '小王';
-  if (v === 14) return 'A';
-  if (v === 13) return 'K';
-  if (v === 12) return '圈';
-  if (v === 11) return '钩';
+  if (v === 14) return 'a';
+  if (v === 13) return 'k';
+  if (v === 12) return 'q';
+  if (v === 11) return 'j';
   if (v === 10) return '十';
   if (v === 9) return '九';
   if (v === 8) return '八';
@@ -772,27 +782,44 @@ function aiMove(idx){
 
 function endDeal(){
   const order=finishedOrder.map(p=>p.idx);
-  const winner=order[0], winTeam=team(winner);
+  const winner=order[0], winTeam=team(winner), loseTeam=1-winTeam;
   const partner=(winner+2)%4;
   const pRank=order.indexOf(partner);                 // 0-based 名次
   const gain=[0,3,2,1][pRank];                          // 头游+队友(二游/三游/四游)
-  let title, body;
   const me=team(0)===winTeam;
-  const newLevel=teamLevels[winTeam]+gain;
-  body=`名次：${order.map((i,n)=>(n+1)+'.'+NAMES[i]).join('  ')}<br>`+
-       `<b>${winTeam===0?'你方':'对方'}</b> 头游，升 ${gain} 级`;
-  if(teamLevels[winTeam]>=14 && gain>0){
-    gameOver=true;
-    title=me?'🏆 你方过了 A，获胜！':'😵 对方过了 A，你方失败';
-    Sound.play(me ? 'victory' : 'defeat');
-    showOverlay(title,body,()=>newGame(),'再来一局');
-    return;
+  const sideName=t=>t===0?'你方':'对方';
+  const demote=t=>{ teamLevels[t]=2; aFails[t]=0; };    // 三打A未过, 降回2级
+  const msgs=[`名次：${order.map((i,n)=>(n+1)+'.'+NAMES[i]).join('  ')}`,
+              `<b>${sideName(winTeam)}</b> 头游`];
+  let title;
+
+  if(teamLevels[winTeam]===14){                         // 打A方当头游, 判定过A
+    if(gain>=2){                                         // 双下 或 1、3名 → 过A获胜
+      gameOver=true;
+      title=me?'🏆 你方过A，获胜！':'😵 对方过A，你方失败';
+      msgs.push(`${sideName(winTeam)}在 A 上${gain===3?'双下':'1、3名'}，过 A 获胜！`);
+      Sound.play(me?'victory':'defeat');
+      showOverlay(title,msgs.join('<br>'),()=>newGame(),'再来一局');
+      return;
+    }
+    aFails[winTeam]++;                                   // 1、4名 → 打A未过
+    if(aFails[winTeam]>=3){ demote(winTeam); msgs.push(`⚠ ${sideName(winTeam)}三次打 A 未过，降回 2 级！`); }
+    else msgs.push(`${sideName(winTeam)}打 A 未过(1、4名)，第 ${aFails[winTeam]} 次，继续打 A`);
+  } else {                                               // 未到A: 正常升级, 最高停在A
+    teamLevels[winTeam]=Math.min(14, teamLevels[winTeam]+gain);
+    msgs.push(`升 ${gain} 级，至 ${valueName(teamLevels[winTeam])}`);
   }
-  teamLevels[winTeam]=Math.min(14,newLevel);
-  currentLevel=teamLevels[winTeam];
-  title=(me?'本局你方头游':'本局对方头游')+' — 级牌升至 '+valueName(currentLevel);
-  Sound.play(me ? 'win' : 'defeat');
-  showOverlay(title,body,()=>{ prevOrder=order; startDeal(); },'下一局');
+
+  if(teamLevels[loseTeam]===14){                         // 对方停在A却未得头游, 也算一次打A未过
+    aFails[loseTeam]++;
+    if(aFails[loseTeam]>=3){ demote(loseTeam); msgs.push(`⚠ ${sideName(loseTeam)}三次打 A 未过，降回 2 级！`); }
+    else msgs.push(`${sideName(loseTeam)}打 A 未过(未得头游)，第 ${aFails[loseTeam]} 次`);
+  }
+
+  currentLevel=teamLevels[winTeam];                      // 下一局级牌跟随本局头游方
+  title=(me?'本局你方头游':'本局对方头游')+' — 下局打 '+valueName(currentLevel);
+  Sound.play(me?'win':'defeat');
+  showOverlay(title,msgs.join('<br>'),()=>{ prevOrder=order; startDeal(); },'下一局');
 }
 
 /* ============================ 人类操作 ============================ */
@@ -882,7 +909,7 @@ function renderAll(){
   renderHand();
   document.getElementById('status').innerHTML=
     `级牌(主牌)：<b>${valueName(currentLevel)}</b><br>`+
-    `你方等级：<b>${valueName(teamLevels[0])}</b>　对方：<b>${valueName(teamLevels[1])}</b><br>`+
+    `你方等级：<b>${valueName(teamLevels[0])}</b>${teamLevels[0]===14&&aFails[0]?'(打A第'+(aFails[0]+1)+'次)':''}　对方：<b>${valueName(teamLevels[1])}</b>${teamLevels[1]===14&&aFails[1]?'(打A第'+(aFails[1]+1)+'次)':''}<br>`+
     `当前：<b>${NAMES[currentPlayer]}</b>${lastPlay?'　需压：'+descText(lastPlay.desc):'　(自由出牌)'}`;
 }
 function updateButtons(){
