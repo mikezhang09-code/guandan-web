@@ -718,6 +718,7 @@ function commit(seat,cards){
   turnPos++; takeTurn();
 }
 function resolveTrick(){
+  renderAll();          // 关键: 渲染最后一手(否则第4家的牌/牌数不显示, 取消轮到高亮)
   const w=trickWinner(); const wt=team(w);
   let p=0; trick.forEach(t=>t.cards.forEach(c=>p+=pts(c)));
   teamPoints[wt]+=p;
