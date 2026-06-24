@@ -79,6 +79,7 @@
   </div>
 </div>
 
+<script src="voices.js"></script>
 <script>
 /* ============================ 声音合成器 ============================ */
 const Sound = {
@@ -100,6 +101,7 @@ const Sound = {
   toggleMute() {
     this.init();
     this.muted = !this.muted;
+    if (this.muted && this._stopVoice) this._stopVoice();
     localStorage.setItem('game_sound_muted', this.muted);
     this.updateToggleButton();
     return this.muted;
@@ -155,18 +157,7 @@ const Sound = {
           filter.connect(noiseGain);
           noiseGain.connect(this.ctx.destination);
           noise.start(now);
-
-          const osc = this.ctx.createOscillator();
-          const oscGain = this.ctx.createGain();
-          osc.type = 'sine';
-          osc.frequency.setValueAtTime(150, now);
-          osc.frequency.exponentialRampToValueAtTime(60, now + 0.12);
-          oscGain.gain.setValueAtTime(0.2, now);
-          oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
-          osc.connect(oscGain);
-          oscGain.connect(this.ctx.destination);
-          osc.start(now);
-          osc.stop(now + 0.12);
+          // 已移除原先的低频 boom(咚)，只保留轻柔的拍牌声
           break;
         }
         case 'pass': {
@@ -264,9 +255,43 @@ const Sound = {
       console.warn("Web Audio API error:", e);
     }
   },
+  // text 可为字符串或字符串数组(数组会按顺序连续播放)
   speak(text, seatIndex = 0) {
     this.init();
-    if (this.muted || !window.speechSynthesis) return;
+    if (this.muted) return;
+    const parts = (Array.isArray(text) ? text : [text]).filter(Boolean);
+    // 优先使用百度 TTS 预生成的真人语音(voices.js + voices/ 目录)
+    if (window.VOICE_PHRASES) {
+      this._stopVoice();
+      this._voiceQueue = parts.map(t => this._voiceFile(t, seatIndex)).filter(Boolean);
+      this._playNextVoice();
+      return;
+    }
+    // 回退: 浏览器合成语音(尚未生成 voices 时)
+    this._speakFallback(parts.join('，'), seatIndex);
+  },
+  _voiceFile(text, seat) {
+    const i = window.VOICE_PHRASES.indexOf(text);
+    if (i < 0) return null;
+    return `${window.VOICE_BASE || 'voices/'}${seat % 4}/${i}.mp3`;
+  },
+  _playNextVoice() {
+    if (!this._voiceQueue || !this._voiceQueue.length) { this._curVoice = null; return; }
+    const url = this._voiceQueue.shift();
+    const a = new Audio(url);
+    this._curVoice = a;
+    const next = () => { if (this._curVoice === a) this._playNextVoice(); };
+    a.onended = next;
+    a.onerror = next;
+    a.play().catch(() => {});
+  },
+  _stopVoice() {
+    if (this._curVoice) { try { this._curVoice.pause(); } catch (e) {} }
+    this._curVoice = null;
+    this._voiceQueue = [];
+  },
+  _speakFallback(text, seatIndex) {
+    if (!window.speechSynthesis) return;
     try {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
@@ -275,11 +300,8 @@ const Sound = {
       const pitches = [1.05, 0.95, 1.15, 0.9];
       utterance.rate = rates[seatIndex % 4];
       utterance.pitch = pitches[seatIndex % 4];
-      
       const voices = window.speechSynthesis.getVoices().filter(v => v.lang.includes('zh'));
-      if (voices.length > 0) {
-        utterance.voice = voices[seatIndex % voices.length];
-      }
+      if (voices.length > 0) utterance.voice = voices[seatIndex % voices.length];
       window.speechSynthesis.speak(utterance);
     } catch (e) {
       console.warn("Speech synthesis error:", e);
