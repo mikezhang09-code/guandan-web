@@ -514,7 +514,7 @@ function baseControls(){ setControls(
 /* ===== 发牌 / 亮主·反主 / 扣底 ===== */
 // 亮主强度: 级牌单张=1, 级牌对子=2(可反主), 小王对=3, 大王对=4(无主)。只能被更高强度压过。
 let dealPile=[], dealIdx=0, dealTimer=null, declaration=null, firstDeal=true, declareSig='';
-const DEAL_MS=80, DECLARE_WINDOW_MS=4500;
+const DEAL_MS=130, DECLARE_WINDOW_MS=8000;
 
 function newGame(){ teamLevels=[2,2]; declarerTeam=0; declarerSeat=0; gameOver=false; firstDeal=true; startDeal(); }
 function startDeal(){
@@ -598,7 +598,8 @@ function renderDeal(){ renderAll(); updateDeclareControls(); }
 function updateDeclareControls(){
   if(phase!=='deal') return;
   const opts=declareOptions(0).filter(o=>canDeclare(0, o.suit, o.strength)).sort((a,b)=>b.strength-a.strength);
-  const sig=(declaration?declaration.seat+declaration.suit+declaration.strength:'-')+'|'+opts.map(o=>o.suit+o.strength).join(',');
+  const dealDone=dealIdx>=100;
+  const sig=(declaration?declaration.seat+declaration.suit+declaration.strength:'-')+'|'+opts.map(o=>o.suit+o.strength).join(',')+'|'+dealDone;
   if(sig===declareSig) return; declareSig=sig;
   const cur = declaration
     ? `当前主：<b>${declaration.suit==='NT'?'无主':SUIT_NAME[declaration.suit]}</b>（${NAMES[declaration.seat]}）`
@@ -609,8 +610,16 @@ function updateDeclareControls(){
                                 : (SUIT_SYM[o.suit] + (o.strength>=2?' 对(反主)':''));
     html += `<button class="suit ${o.suit!=='NT'&&RED.has(o.suit)?'red':''}" data-s="${o.suit}" data-st="${o.strength}">亮 ${label}</button>`;
   }
+  // 发完牌后给一个"我看完了, 不用等"的按钮, 想想清楚随时可以提前结束等待
+  if(dealDone) html += `<button id="bConfirmTrump" class="ghost">看好了，开始出牌</button>`;
   setControls(html);
-  document.querySelectorAll('#controls button').forEach(b=>b.onclick=()=>humanDeclare(b.dataset.s, +b.dataset.st));
+  document.querySelectorAll('#controls button.suit').forEach(b=>b.onclick=()=>humanDeclare(b.dataset.s, +b.dataset.st));
+  const cb=document.getElementById('bConfirmTrump'); if(cb) cb.onclick=confirmDeclareNow;
+}
+function confirmDeclareNow(){
+  if(phase!=='deal') return;
+  if(dealTimer){ clearTimeout(dealTimer); dealTimer=null; }
+  finishDeclare();
 }
 function finishDeclare(){
   dealTimer=null;
@@ -783,6 +792,14 @@ function aiLead(seat){ const hand=players[seat].hand;
   // 其次甩低对子
   const pairs=groupPairs(nonTr).filter(pr=>pr[0].rank<11 && pts(pr[0])===0);
   if(pairs.length) return pairs[0];
+  // 手上主牌明显比每个对手都多时, 借机拉主(耗掉对方主牌), 同样不含分牌以免白丢分
+  const T=hand.filter(c=>isTrump(c));
+  const oppTrumpMax=Math.max(0, ...players.filter(p=>p.idx!==seat).map(p=>p.hand.filter(isTrump).length));
+  if(T.length>oppTrumpMax+1){                      // 留一点余量, 不把自己主牌拉空
+    const Tsafe=T.filter(c=>pts(c)===0);
+    const ttr=longestTractor(Tsafe); if(ttr) return ttr;
+    const tpr=groupPairs(Tsafe)[0]; if(tpr) return tpr;
+  }
   const pool=(nonTr.length?nonTr:hand).slice().sort((a,b)=>pts(a)-pts(b)||tval(a)-tval(b));
   return [pool[0]]; }
 function aiFollow(seat){
@@ -834,8 +851,12 @@ function aiFollow(seat){
     }
     if(!chosen){ const pool=hand.slice().sort((a,b)=> mateWin?(pts(b)-pts(a)):(pts(a)-pts(b))||tval(a)-tval(b)); chosen=pool.slice(0,lead.size); }
   } else {
-    const others=hand.filter(c=>!inGroup(c,lead.group)).sort((a,b)=> mateWin?(pts(b)-pts(a)):(pts(a)-pts(b))||tval(a)-tval(b));
-    chosen=[...G, ...others.slice(0,lead.size-G.length)];
+    // 凑不齐门数, 混主牌/其他门出牌注定赢不了这墩, 先用非主牌垫, 实在不够才动用主牌
+    const need=lead.size-G.length;
+    const sortFillers=cs=>cs.sort((a,b)=> mateWin?(pts(b)-pts(a)):(pts(a)-pts(b))||tval(a)-tval(b));
+    const otherNonTrump=sortFillers(hand.filter(c=>!inGroup(c,lead.group)&&!isTrump(c)));
+    const fillers = otherNonTrump.length>=need ? otherNonTrump : sortFillers(hand.filter(c=>!inGroup(c,lead.group)));
+    chosen=[...G, ...fillers.slice(0,need)];
   }
   if(!chosen || !validateFollow(chosen,hand,lead).ok) chosen=forcedFollow(hand,lead);
   return chosen;
