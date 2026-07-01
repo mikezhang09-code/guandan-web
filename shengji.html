@@ -874,42 +874,52 @@ function aiLead(seat){
   const tw=bestThrow(seat); if(tw) return tw;          // 1. 有把握的甩牌
   
   const nonTr=hand.filter(c=>!isTrump(c));
-  
-  // 2. 优先出非主牌中的拖拉机
-  const ntr=longestTractor(nonTr.filter(c=>pts(c)===0));
+
+  // 2. 优先出非主牌中的拖拉机：先试真正最长的一段(可能含分)，无分或读全手牌确认安全就直接出；
+  //    否则退回旧逻辑——只在不含分的牌里找连对(不会送分，但可能更短或找不到)
+  const ntr=safeTractor(nonTr, seat);
   if(ntr) return ntr;
-  
-  // 3. 出非主牌中的对子，优先出大对子（比如AA、KK等）以控手
+
+  // 3. 出非主牌中的对子，优先出大对子（比如AA、KK等）以控手；K 对含分，需确认无人能大过才出（A 对本身不含分，仍可直接出）
   const npairs=groupPairs(nonTr);
   if(npairs.length){
     npairs.sort((a,b)=>tval(b[0])-tval(a[0]));
-    if(tval(npairs[0][0]) >= 13) return npairs[0]; // K是13, A是14
+    if(tval(npairs[0][0]) >= 13 && (pts(npairs[0][0])===0 || !anyOpponentBeats(npairs[0], seat))) return npairs[0]; // K是13, A是14
   }
-  
+
   // 4. 出非主牌中的单张A（大牌先发，控手且能安全收分）
   const aces=nonTr.filter(c=>c.rank===14);
   if(aces.length){
     return [aces[0]];
   }
-  
+
   // 5. 调主（主牌多时，主动出主牌消耗对手将牌）
   const T=hand.filter(c=>isTrump(c));
   const oppTrumpMax=Math.max(0, ...players.filter(p=>p.idx!==seat).map(p=>p.hand.filter(isTrump).length));
   if(T.length>oppTrumpMax+1){
+    const ttr=safeTractor(T, seat); if(ttr) return ttr;
+
+    const tprFull=groupPairs(T);
+    if(tprFull.length){
+      tprFull.sort((a,b)=>tval(b[0])-tval(a[0]));
+      if(pts(tprFull[0][0])===0 || !anyOpponentBeats(tprFull[0], seat)) return tprFull[0];
+    }
     const Tsafe=T.filter(c=>pts(c)===0);
-    const ttr=longestTractor(Tsafe); if(ttr) return ttr;
     const tpr=groupPairs(Tsafe);
     if(tpr.length){
       tpr.sort((a,b)=>tval(b[0])-tval(a[0]));
       return tpr[0];
     }
+    const tsingFull=T.slice().sort((a,b)=>tval(b)-tval(a));
+    if(tsingFull.length && (pts(tsingFull[0])===0 || !anyOpponentBeats([tsingFull[0]], seat))) return [tsingFull[0]];
     const tsing=Tsafe.sort((a,b)=>tval(b)-tval(a));
     if(tsing.length) return [tsing[0]];
   }
 
-  // 6. 如果有其他对子，也可以出
+  // 6. 如果有其他对子，也可以出；按从大到小顺序找第一个"不含分或读全手牌确认安全"的对子，不再无脑出最大对子送分
   if(npairs.length){
-    return npairs[0]; // 此时npairs已按从大到小排序
+    const safePair=npairs.find(pr=>pts(pr[0])===0||!anyOpponentBeats(pr, seat));
+    if(safePair) return safePair;
   }
 
   // 7. 兜底：出最小的非主牌（不送分给对手）
@@ -1044,6 +1054,38 @@ function bestThrow(seat){
     if(safe.length>=2 && (!pick || safe.length>pick.length)) pick=safe;
   }
   return pick;
+}
+
+// 全信息判断: seat 领出这个组合(单/对/连对), 对方阵营有没有人能大过 (读全部手牌, 非概率推测；
+// 队友大过没关系，分还是自己队的，所以只看对方两家 —— 这点和 bestThrow/throwBeatable 故意不同：
+// 那两个判断的是"甩牌是否会被任何人(含队友)压下去而失败"这条独立规则，不是"我方是否会丢分"。
+function anyOpponentBeats(cards, seat){
+  const combo=detectCombo(cards); if(!combo) return true;
+  const group=combo.group;
+  const opps=players.filter(p=>team(p.idx)!==team(seat));
+  for(const opp of opps){
+    const inSuit=opp.hand.filter(c=>inGroup(c,group));
+    if(inSuit.length>=combo.size){
+      if(combo.type==='single'){ if(Math.max(...inSuit.map(tval))>combo.topVal) return true; }
+      else if(combo.type==='pair'){ if(oppMaxPairVal(inSuit)>combo.topVal) return true; }
+      else { if(tractorsOf(inSuit,combo.size).some(t=>Math.max(...t.map(tval))>combo.topVal)) return true; }
+    } else if(group!=='T' && inSuit.length===0){   // 缺门才可能整手换成主牌; 凑不齐门数时必须先垫上手里现有的这门牌
+      const T=opp.hand.filter(isTrump);
+      if(T.length>=combo.size){
+        if(combo.type==='single'){ if(T.length) return true; }
+        else if(combo.type==='pair'){ if(oppMaxPairVal(T)>=0) return true; }
+        else { if(tractorsOf(T,combo.size).length) return true; }
+      }
+    }
+  }
+  return false;
+}
+// 拖拉机安全探测: 先试 pool 里真正最长的一段连对(可能含分), 无分或读全手牌确认安全就用;
+// 否则退回旧逻辑——只在不含分的牌里找连对(旧行为, 保底不送分, 但可能更短或找不到)。
+function safeTractor(pool, seat){
+  const full=longestTractor(pool);
+  if(full && (full.every(c=>pts(c)===0) || !anyOpponentBeats(full, seat))) return full;
+  return longestTractor(pool.filter(c=>pts(c)===0));
 }
 
 /* ===== 人类出牌 ===== */
