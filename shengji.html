@@ -750,22 +750,37 @@ function resolveTrick(){
 function groupPairs(G){ const m={},res=[]; for(const c of G){ const k=c.suit+c.rank+(c.joker||'');
     if(m[k]){ res.push([m[k],c]); m[k]=null; } else m[k]=c; }
   return res.sort((a,b)=>tval(a[0])-tval(b[0])); }
-function tractorsOf(G,size){ // 同组 size 张连对
-  const need=size/2, byRank={};
+function pairsInSeq(G){ // G 内可组成拖拉机的对子(排除百搭/王/级牌单独凑成的对), 按牌序位置排序
+  const byRank={};
   G.forEach(c=>{ if(effSuit(c)==='T' && (c.joker||c.rank===level||c.suit!==trumpSuit)) return;
     const k=c.suit+c.rank; (byRank[k]=byRank[k]||[]).push(c); });
   const pairs=Object.values(byRank).filter(a=>a.length>=2).map(a=>[a[0],a[1]]);
   pairs.sort((a,b)=>SEQIDX[a[0].rank]-SEQIDX[b[0].rank]);
+  return pairs; }
+function adjacentPair(a,b){ return a.suit===b.suit && SEQIDX[a.rank]-SEQIDX[b.rank]===1; } // 同花色且序位相邻
+function tractorsOf(G,size){ // 同组 size 张连对
+  const need=size/2, pairs=pairsInSeq(G);
   const res=[];
   for(let i=0;i+need<=pairs.length;i++){ let ok=true;
-    for(let j=1;j<need;j++) if(SEQIDX[pairs[i+j][0].rank]-SEQIDX[pairs[i+j-1][0].rank]!==1){ok=false;break;}
+    for(let j=1;j<need;j++) if(!adjacentPair(pairs[i+j][0],pairs[i+j-1][0])){ok=false;break;}
     if(ok) res.push(pairs.slice(i,i+need).flat()); }
   return res; }
-function buildTrumpCombo(type,size){ const T=players; /*unused*/ }
+function longestTractor(G){ // G 内最长的一段连对(拖拉机), 没有则 null
+  const pairs=pairsInSeq(G);
+  let best=[], run=[];
+  for(let i=0;i<pairs.length;i++){
+    if(i>0 && !adjacentPair(pairs[i][0],pairs[i-1][0])) run=[];
+    run.push(pairs[i]);
+    if(run.length>=2 && run.length>best.length) best=run.slice();
+  }
+  return best.length? best.flat() : null; }
 function aiLead(seat){ const hand=players[seat].hand;
   const tw=bestThrow(seat); if(tw) return tw;          // 有把握的甩牌
   const nonTr=hand.filter(c=>!isTrump(c));
-  // 优先甩低对子
+  // 优先整段甩出手上最长的拖拉机(比单出一对更有威胁), 不含分牌以免白丢分
+  const tr=longestTractor(nonTr.filter(c=>pts(c)===0));
+  if(tr) return tr;
+  // 其次甩低对子
   const pairs=groupPairs(nonTr).filter(pr=>pr[0].rank<11 && pts(pr[0])===0);
   if(pairs.length) return pairs[0];
   const pool=(nonTr.length?nonTr:hand).slice().sort((a,b)=>pts(a)-pts(b)||tval(a)-tval(b));
@@ -798,17 +813,22 @@ function aiFollow(seat){
       const prs=groupPairs(G);
       if(oppWin){ const c=prs.find(p=>beats(p)); if(c) chosen=c; }
       if(!chosen){ if(prs.length){
-          if(mateWin){ const safe=prs.filter(p=>notOvertake(tval(p[0]))); chosen= safe.length?safe[0]:prs[0]; }
-          else chosen=prs[0];
+          if(mateWin){
+            const pool = prs.some(p=>notOvertake(tval(p[0]))) ? prs.filter(p=>notOvertake(tval(p[0]))) : prs;
+            chosen = pool.slice().sort((a,b)=>pts(b[0])-pts(a[0])||tval(a[0])-tval(b[0]))[0];
+          } else chosen=prs[0];
         }
         else { const s=G.slice().sort((a,b)=> mateWin?(pts(b)-pts(a)):(pts(a)-pts(b))||tval(a)-tval(b)); chosen=[s[0],s[1]]; } }
     } else { const trs=tractorsOf(G,lead.size);
       if(oppWin){ const c=trs.find(t=>beats(t)); if(c) chosen=c; }
       if(!chosen) chosen= trs[0] || G.slice(0,lead.size); }
   } else if(G.length===0){
-    if(oppWin && best.combo.group!=='T'){            // 用主牌将吃
+    // 空对空的墩不值得拿主牌抢, 除非本墩已经有分或这是本局最后一墩(可能扣底翻倍); 允许反扣别家已出的主牌
+    const trickPts=trick.reduce((s,t)=>s+t.cards.reduce((s2,c)=>s2+pts(c),0),0);
+    const worthRuffing=trickPts>0 || hand.length===lead.size;
+    if(oppWin && worthRuffing){            // 用主牌将吃(含反扣)
       const T=hand.filter(c=>isTrump(c)).sort((a,b)=>tval(a)-tval(b));
-      if(lead.type==='single' && T.length) { if(beats([T[0]])) chosen=[T[0]]; }
+      if(lead.type==='single' && T.length) { const c=T.find(x=>beats([x])); if(c) chosen=[c]; }
       else if(lead.type==='pair'){ const tp=groupPairs(T).find(p=>beats(p)); if(tp) chosen=tp; }
       else { const tt=tractorsOf(T,lead.size).find(t=>beats(t)); if(tt) chosen=tt; }
     }
