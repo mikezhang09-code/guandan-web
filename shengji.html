@@ -59,12 +59,19 @@
     flex-direction:column; align-items:center; justify-content:center; z-index:10; text-align:center; padding:20px; }
   #overlay h2 { margin:0 0 12px; } #overlay p { margin:4px; font-size:15px; }
   #center-hint { position:absolute; top:47%; left:50%; transform:translate(-50%,-50%); font-size:13px; opacity:.5; pointer-events:none; }
-  a.home { position:absolute; bottom:8px; left:10px; color:#cfe; font-size:12px; }
+  #statusLinks { margin-top:6px; display:flex; gap:14px; }
+  #statusLinks a, #statusLinks span { color:#cfe; font-size:12px; text-decoration:none; cursor:pointer; user-select:none; }
 </style>
 </head>
 <body>
 <div id="board">
-  <div id="status"></div>
+  <div id="status">
+    <div id="statusText"></div>
+    <div id="statusLinks">
+      <a href="index.html">🏠 选择游戏</a>
+      <span id="sound-toggle">🔊 声音</span>
+    </div>
+  </div>
   <div id="log"></div>
   <div id="center-hint">升级 · 拖拉机</div>
   <div class="seat" id="seat2"><span class="name">对家(队友)</span><div class="count"></div></div>
@@ -84,10 +91,6 @@
 
   <div id="overlay"><h2 id="ovTitle"></h2><div id="ovBody"></div>
     <button id="ovBtn" style="margin-top:16px;">继续</button></div>
-  <div style="position:absolute;bottom:8px;left:10px;display:flex;gap:16px;z-index:5;font-size:12px;">
-    <a href="index.html" style="color:#cfe;text-decoration:none;">🏠 选择游戏</a>
-    <span id="sound-toggle" style="color:#cfe;cursor:pointer;user-select:none;">🔊 声音</span>
-  </div>
 </div>
 
 <script src="voices.js"></script>
@@ -297,6 +300,7 @@ const Sound = {
     if (this._voiceQueue && this._voiceQueue.length) {
       const url = this._voiceQueue.shift();
       const a = new Audio(url);
+      a.playbackRate = 1.35;   // 预录制的语音念得比较慢, 提速播放更跟得上牌局节奏
       this._curVoice = a;
       const next = () => { if (this._curVoice === a) this._playNextVoice(); };
       a.onended = next;
@@ -412,6 +416,12 @@ function validateFollow(sel,hand,lead){
   if(selG!==need) return {ok:false,why:`必须跟 ${need} 张${lead.group==='T'?'主牌':SUIT_NAME[lead.group]}`};
   if(lead.type==='pair' && G.length>=2 && hasPair(hand,lead.group) && !hasPair(sel,lead.group))
     return {ok:false,why:'有对子时必须出对子'};
+  // 跟拖拉机: 凑不出同样的连对时, 也要尽量用手上现成的对子, 不能拆对垫单张
+  if(lead.type==='tractor'){
+    const needPairs=Math.min(lead.size/2, countPairs(hand, lead.group));
+    if(countPairs(sel, lead.group) < needPairs)
+      return {ok:false, why:`有对子时必须尽量用对子跟`};
+  }
   // 跟甩牌: 有对子就必须跟对(不能拆对保留来牵制)
   if(lead.type==='throw' && lead.pairs>0){
     const needPairs=Math.min(lead.pairs, countPairs(hand, lead.group));
@@ -423,8 +433,10 @@ function validateFollow(sel,hand,lead){
 function forcedFollow(hand,lead){             // 一定合法的兜底跟牌
   const G=hand.filter(c=>inGroup(c,lead.group)).slice().sort((a,b)=>tval(a)-tval(b));
   const need=Math.min(lead.size,G.length), out=[];
-  // 需要跟的对子数: 对子=1, 甩牌=其含的对子数
-  const needPairs = lead.type==='pair' ? 1 : (lead.type==='throw' ? (lead.pairs||0) : 0);
+  // 需要跟的对子数: 对子=1, 拖拉机=尽量用现有对子凑, 甩牌=其含的对子数
+  const needPairs = lead.type==='pair' ? 1
+    : lead.type==='tractor' ? Math.min(lead.size/2, countPairs(G, lead.group))
+    : (lead.type==='throw' ? (lead.pairs||0) : 0);
   if(needPairs>0){
     const m={}; const got=[];
     for(const c of G){ const k=c.suit+c.rank+(c.joker||'');
@@ -481,7 +493,7 @@ function renderHand(){ const h=document.getElementById('hand'); h.innerHTML='';
 function renderAll(){ [0,1,2,3].forEach(renderSeat); renderHand(); renderStatus(); }
 function renderStatus(){ const def=1-declarerTeam;
   const tName = trumpSuit ? (trumpSuit==='NT'?'无主':SUIT_NAME[trumpSuit]) : (phase==='deal'?'发牌中…':'—');
-  document.getElementById('status').innerHTML=
+  document.getElementById('statusText').innerHTML=
     `主牌：<b>${tName}</b>　级牌：<b>${rankText({rank:level})}</b><br>`+
     `庄家：<b>${NAMES[declarerSeat]}</b>(${team(declarerSeat)===0?'你方':'对方'})<br>`+
     `你方等级：<b>${rankText({rank:teamLevels[0]})}</b>　对方：<b>${rankText({rank:teamLevels[1]})}</b><br>`+
@@ -502,7 +514,7 @@ function baseControls(){ setControls(
 /* ===== 发牌 / 亮主·反主 / 扣底 ===== */
 // 亮主强度: 级牌单张=1, 级牌对子=2(可反主), 小王对=3, 大王对=4(无主)。只能被更高强度压过。
 let dealPile=[], dealIdx=0, dealTimer=null, declaration=null, firstDeal=true, declareSig='';
-const DEAL_MS=55;
+const DEAL_MS=80, DECLARE_WINDOW_MS=4500;
 
 function newGame(){ teamLevels=[2,2]; declarerTeam=0; declarerSeat=0; gameOver=false; firstDeal=true; startDeal(); }
 function startDeal(){
@@ -530,8 +542,9 @@ function dealStep(){
   } else {
     kitty=dealPile.slice(100);                  // 末 8 张做底牌
     aiMaybeDeclare();
-    log('发牌结束，可反主（有更强的级牌对子/王对）或确定主牌');
-    dealTimer=setTimeout(finishDeclare, 1200);  // 留个反主窗口
+    renderDeal();                               // 刷新一次, 免得发牌最后一刻的反主没显示出来
+    log(`发牌结束，可看清手牌后再亮主/反主（约 ${(DECLARE_WINDOW_MS/1000).toFixed(1)} 秒）`);
+    dealTimer=setTimeout(finishDeclare, DECLARE_WINDOW_MS);  // 留个反主窗口, 让人看清手牌再决定
   }
 }
 // 某座位当前手牌能做出的亮主选项(花色 + 强度)
@@ -642,7 +655,8 @@ function aiBury(){ const d=players[declarerSeat];
 /* ===== 出牌流程 ===== */
 function startPlay(){ phase='play'; baseControls(); leadSeat=declarerSeat; startTrick(leadSeat); }
 function startTrick(lead){ trick=[]; trickOrder=[lead,(lead+1)%4,(lead+2)%4,(lead+3)%4]; turnPos=0;
-  // 不在这里清牌: 让上一墩四家的牌一直留到新领出那刻才清, 方便看清最后出牌的那家
+  // 上一墩的展示已经在 resolveTrick 里停留过一段时间了, 新一墩开始时清空, 免得挡视线
+  players.forEach(q=>q.lastShown=null);
   renderAll(); takeTurn(); }
 function takeTurn(){
   if(turnPos>=4){ return resolveTrick(); }
@@ -699,7 +713,6 @@ function getShengjiPlaySpeech(cards, turnPos, leadCombo) {
   return [];
 }
 function commit(seat,cards){
-  if(turnPos===0) players.forEach(q=>q.lastShown=null);   // 新一墩领出时, 才清掉上一墩的展示
   const p=players[seat]; const ids=new Set(cards.map(c=>c.id));
   p.hand=p.hand.filter(c=>!ids.has(c.id)); p.lastShown=cards.slice();
   let combo;
@@ -725,7 +738,7 @@ function resolveTrick(){
   let p=0; trick.forEach(t=>t.cards.forEach(c=>p+=pts(c)));
   teamPoints[wt]+=p;
   document.getElementById('play'+w).classList.add('win');
-  lastTrickInfo={winner:w, size:trick[0].cards.length};
+  lastTrickInfo={winner:w, size:trick[0].cards.length, combo:trick[0].combo};
   log(`${NAMES[w]} 赢墩` + (p?`，得 ${p} 分`:''));
   Sound.play(wt === team(0) ? 'win' : 'pass');
   renderStatus();
@@ -771,15 +784,23 @@ function aiFollow(seat){
   const beats=cards=>{ const c=detectCombo(cards); if(!c||c.type!==lead.type||c.size!==lead.size) return false;
     if(c.group==='T'&&best.combo.group!=='T') return true;
     return c.group===best.combo.group && c.topVal>best.combo.topVal; };
+  // 队友已经赢着这一墩时, 不要用大牌反超自己队友(白白浪费), 只在手上全是能反超的牌时才被迫用
+  const notOvertake=v=>v<best.combo.topVal;
   let chosen=null;
   if(G.length>=lead.size){
     if(lead.type==='single'){
       if(oppWin){ const c=G.filter(x=>beats([x]))[0]; if(c) chosen=[c]; }
-      if(!chosen){ const s=G.slice().sort((a,b)=> mateWin? (pts(b)-pts(a)||tval(a)-tval(b)) : (pts(a)-pts(b)||tval(a)-tval(b))); chosen=[s[0]]; }
+      if(!chosen){
+        const pool = mateWin && G.some(c=>notOvertake(tval(c))) ? G.filter(c=>notOvertake(tval(c))) : G;
+        const s=pool.slice().sort((a,b)=> mateWin? (pts(b)-pts(a)||tval(a)-tval(b)) : (pts(a)-pts(b)||tval(a)-tval(b))); chosen=[s[0]];
+      }
     } else if(lead.type==='pair'){
       const prs=groupPairs(G);
       if(oppWin){ const c=prs.find(p=>beats(p)); if(c) chosen=c; }
-      if(!chosen){ if(prs.length){ chosen= mateWin? prs[prs.length-1] : prs[0]; }
+      if(!chosen){ if(prs.length){
+          if(mateWin){ const safe=prs.filter(p=>notOvertake(tval(p[0]))); chosen= safe.length?safe[0]:prs[0]; }
+          else chosen=prs[0];
+        }
         else { const s=G.slice().sort((a,b)=> mateWin?(pts(b)-pts(a)):(pts(a)-pts(b))||tval(a)-tval(b)); chosen=[s[0],s[1]]; } }
     } else { const trs=tractorsOf(G,lead.size);
       if(oppWin){ const c=trs.find(t=>beats(t)); if(c) chosen=c; }
@@ -897,7 +918,9 @@ function endDeal(){
   // 扣底翻倍: 闲家赢最后一墩
   let kittyPts=kitty.reduce((s,c)=>s+pts(c),0), bonus=0, mult=1;
   if(lastTrickInfo && team(lastTrickInfo.winner)===def && kittyPts>0){
-    mult=Math.pow(2, lastTrickInfo.size);   // 抠底倍率=2^(获胜牌型张数): 单张2 对子4 两连对16 …
+    const c=lastTrickInfo.combo;
+    const pairs = !c ? 0 : c.type==='tractor' ? c.size/2 : c.type==='pair' ? 1 : c.type==='throw' ? (c.pairs||0) : 0;
+    mult=Math.pow(2, pairs+1);   // 抠底倍率=2^(对子数+1): 单张2 对子4 两连对8 三连对16 …
     bonus=kittyPts * mult; d+=bonus;
   }
   const dealLevel=level; let body, title, win=false;
