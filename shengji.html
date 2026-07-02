@@ -996,13 +996,24 @@ function validateThrow(sel){
   if(!sel.every(c=>inGroup(c,g))) return {ok:false, why:'甩牌必须是同一门花色（或全是主牌）'};
   return {ok:true, group:g};
 }
-function decomposeThrow(sel){                 // 拆成对子(每对用一张代表)与单张
+function decomposeThrow(sel){                 // 拆成连对(拖拉机, 各对用代表张数组)/独立对子(每对一张代表)/单张
   const byKey={}; sel.forEach(c=>{ const k=c.suit+'_'+(c.joker||c.rank); (byKey[k]=byKey[k]||[]).push(c); });
-  const pairs=[], singles=[];
+  const pairCards=[], singles=[];
   for(const k in byKey){ const a=byKey[k]; let i=0;
-    for(; i+1<a.length; i+=2) pairs.push(a[i]);
+    for(; i+1<a.length; i+=2) pairCards.push(a[i]);
     if(i<a.length) singles.push(a[i]); }
-  return {pairs, singles};
+  // 从对子代表张里挑出能连成拖拉机的(排除百搭/王/级牌单独凑成的对, 跟 pairsInSeq 同一套口径),
+  // 按序位分组找连续段; 连不成拖拉机的(含被排除的百搭/王/级牌对子)各自算独立对子
+  const seqable=pairCards.filter(c=>!(effSuit(c)==='T' && (c.joker||c.rank===level||c.suit!==trumpSuit)));
+  const pairs=pairCards.filter(c=>effSuit(c)==='T' && (c.joker||c.rank===level||c.suit!==trumpSuit));
+  seqable.sort((a,b)=>SEQIDX[a.rank]-SEQIDX[b.rank]);
+  const tractors=[]; let run=[];
+  for(const c of seqable){
+    if(run.length && adjacentPair(c,run[run.length-1])) run.push(c);
+    else { if(run.length>=2) tractors.push(run); else pairs.push(...run); run=[c]; }
+  }
+  if(run.length>=2) tractors.push(run); else pairs.push(...run);
+  return {tractors, pairs, singles};
 }
 function oppMaxPairVal(og){                    // 某玩家该组内最大对子的 tval(无对子=-1)
   const m={}; let best=-1;
@@ -1011,8 +1022,9 @@ function oppMaxPairVal(og){                    // 某玩家该组内最大对子
 }
 function smallestOf(sel){ return sel.slice().sort((a,b)=>tval(a)-tval(b))[0]; }
 function makeThrowCombo(sel,group){
-  const {pairs}=decomposeThrow(sel);
-  return {type:'throw', size:sel.length, group, topVal:Math.max(...sel.map(tval)), pairs:pairs.length};
+  const {tractors, pairs}=decomposeThrow(sel);
+  const totalPairs=pairs.length + tractors.reduce((s,t)=>s+t.length,0);   // 扣底倍率按总对子数算, 不分是否连成拖拉机
+  return {type:'throw', size:sel.length, group, topVal:Math.max(...sel.map(tval)), pairs:totalPairs};
 }
 // 某些牌里在指定组内能凑出的对子数
 function countPairs(cards, group){
@@ -1021,9 +1033,11 @@ function countPairs(cards, group){
     const k=c.suit+'_'+(c.joker||c.rank); m[k]=(m[k]||0)+1; if(m[k]%2===0) n++; }
   return n;
 }
-// 甩牌是否会被压: 返回需强制打出的最小牌(失败) 或 null(成功)
+// 甩牌是否会被压: 返回需强制打出的最小牌(失败) 或 null(成功)。
+// 连对(拖拉机)只能被对手同样张数(或更长里含相同张数连续段)的拖拉机压过, 不是随便两个更大的散对子就能压;
+// 独立对子/单张则按原规则, 对手有更大的对子/单张就算能压。
 function throwBeatable(sel, group, seat){
-  const {pairs, singles}=decomposeThrow(sel);
+  const {tractors, pairs, singles}=decomposeThrow(sel);
   const opps=players.filter(p=>p.idx!==seat);
   for(const opp of opps){
     const og=opp.hand.filter(c=>inGroup(c,group));
@@ -1032,6 +1046,11 @@ function throwBeatable(sel, group, seat){
     for(const s of singles) if(maxSingle>tval(s)) return smallestOf(sel);
     if(pairs.length){ const mp=oppMaxPairVal(og);
       for(const p of pairs) if(mp>tval(p)) return smallestOf(sel); }
+    for(const tr of tractors){
+      const oppTr=tractorsOf(og, tr.length*2);
+      const oppTrMax=oppTr.length ? Math.max(...oppTr.map(t=>Math.max(...t.map(tval)))) : -1;
+      if(oppTrMax>Math.max(...tr.map(tval))) return smallestOf(sel);
+    }
   }
   return null;
 }
