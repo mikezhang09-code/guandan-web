@@ -48,14 +48,21 @@
 [data-theme="B"] .game.gd { --accent: #2BD4A8; }
 [data-theme="B"] .game.sj { --accent: #5B9CFF; }
 
-/* ---------- base ---------- */
-html, body { height: 100vh; height: 100dvh; }
+/* ---------- base ----------
+   100svh ("small" viewport height) rather than 100dvh: iOS Safari's landscape toolbar can eat
+   into the visible area in a way that isn't always reflected by the dynamic unit right away
+   (e.g. iPhone landscape), so target the guaranteed-safe minimum instead of the optimistic
+   maximum. overflow-y:auto (not hidden) is a hard safety net on top of that -- if the chrome-
+   heavy header/hand/controls area is ever taller than what's actually visible on some device,
+   the controls (out-of-viewport otherwise, per a live iPhone 15 landscape bug report) can still
+   be reached by scrolling instead of being completely stuck off-screen. */
+html, body { height: 100vh; height: 100dvh; height: 100svh; }
 body {
-  margin: 0; overflow: hidden; user-select: none;
+  margin: 0; overflow-x: hidden; overflow-y: auto; -webkit-overflow-scrolling: touch; user-select: none;
   font-family: var(--font-body); color: var(--ink);
   background: var(--felt);
 }
-#board { position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; }
+#board { position: relative; width: 100%; min-height: 100%; display: flex; flex-direction: column; }
 
 /* ---------- header ---------- */
 .cg-header { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 10px 12px 4px; }
@@ -198,7 +205,8 @@ button.ghost { background: rgba(255,255,255,.06); color: var(--ink); box-shadow:
 
 /* ---------- overlay ---------- */
 #overlay {
-  position: absolute; inset: 0; z-index: 30; background: rgba(6,10,14,.76); backdrop-filter: blur(3px);
+  position: absolute; inset: 0; z-index: 30; background: rgba(6,10,14,.76);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
   display: none; align-items: center; justify-content: center; padding: 24px;
 }
 .cg-modal {
@@ -220,6 +228,21 @@ button.ghost { background: rgba(255,255,255,.06); color: var(--ink); box-shadow:
 [data-orient="landscape"] .mini { width: 24px; height: 34px; }
 [data-orient="landscape"] .seat#seat1 { left: 4%; }
 [data-orient="landscape"] .seat#seat3 { right: 4%; }
+/* landscape is the tightest case for vertical space (a real phone's short axis, further eaten
+   into by the browser's own toolbar) -- shrink every fixed-size chrome band so .cg-table (the
+   only flexible one) is less likely to ever need to shrink to 0, which is what pushed the
+   controls/play-button out of the visible area on a real iPhone 15 in landscape. */
+[data-orient="landscape"] .cg-header { padding: 6px 10px 3px; gap: 6px; }
+[data-orient="landscape"] .cg-icon-btn { width: 28px; height: 28px; font-size: 13px; }
+[data-orient="landscape"] .cg-info { padding: 0 12px 3px; min-height: 0; font-size: 11px; }
+[data-orient="landscape"] #hand-area { padding-bottom: 2px; }
+[data-orient="landscape"] #hand { padding: 10px 10px 2px; }
+[data-orient="landscape"] .cg-palette { padding: 2px 12px 0; }
+[data-orient="landscape"] .cg-palette-hint { margin-bottom: 3px; }
+[data-orient="landscape"] .suitTile { width: 38px; height: 46px; }
+[data-orient="landscape"] .suitTile .tt-s { font-size: 17px; }
+[data-orient="landscape"] #controls { padding: 4px 12px 8px; gap: 6px; }
+[data-orient="landscape"] #controls button { padding: 6px 12px; font-size: 12.5px; }
 
 @media (min-width: 700px) {
   /* width:100% is required alongside max-width+auto-margins here: .cg-table's children
