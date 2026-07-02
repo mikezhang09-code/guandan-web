@@ -64,9 +64,11 @@ body {
   border-radius: 9px; font-size: 15px; display: flex; align-items: center; justify-content: center;
   flex: 0 0 auto; cursor: pointer; text-decoration: none; font-family: var(--font-body);
 }
+.cg-icon-btn.active { background: var(--turn-bg); color: var(--turn-ink); box-shadow: 0 0 8px var(--accent-soft); }
 .cg-title {
-  flex: 1; text-align: center; font-family: var(--font-display); font-weight: var(--title-weight);
+  flex: 1; min-width: 0; text-align: center; font-family: var(--font-display); font-weight: var(--title-weight);
   font-size: 16px; color: var(--ink); letter-spacing: .04em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .cg-stats { flex: 0 0 auto; display: flex; gap: 10px; }
 .cg-stat { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
@@ -206,19 +208,22 @@ button.ghost { background: rgba(255,255,255,.06); color: var(--ink); box-shadow:
 .cg-modal #ovBody { font-family: var(--font-body); font-size: 12.5px; color: var(--sub); line-height: 1.6; }
 .cg-modal button { margin-top: 18px; }
 
-/* ---------- responsive ---------- */
-@media (orientation: landscape) {
-  #hand .card { width: 40px; height: 58px; margin-left: -18px; }
-  #hand .card .r { font-size: 14px; } #hand .card .s { font-size: 12px; }
-  .mini { width: 24px; height: 34px; }
-  .seat#seat1 { left: 4%; }
-  .seat#seat3 { right: 4%; }
-  /* landscape's table is short enough that the log panel can reach into the right-seat's
-     zone regardless of sizing -- it's a low-priority nice-to-have, so just hide it here
-     rather than fight for space with gameplay-critical seat chips */
-  #log { display: none; }
-}
-[data-theme="B"] #hand.wrap {
+/* ---------- responsive ----------
+   Driven by [data-orient] on <html>, resolved by theme.js's Orient helper: "auto" (default)
+   tracks the real device/viewport via matchMedia, but a header rotate (⟳) button can force
+   landscape/portrait regardless of the physical viewport -- e.g. to preview/use landscape on
+   a desktop browser without having anything to physically rotate. Plain attribute selectors
+   (not @media) so the forced state and the real-device state render identically either way. */
+[data-orient="landscape"] #hand .card { width: 40px; height: 58px; margin-left: -18px; }
+[data-orient="landscape"] #hand .card .r { font-size: 14px; } [data-orient="landscape"] #hand .card .s { font-size: 12px; }
+[data-orient="landscape"] .mini { width: 24px; height: 34px; }
+[data-orient="landscape"] .seat#seat1 { left: 4%; }
+[data-orient="landscape"] .seat#seat3 { right: 4%; }
+/* landscape's table is short enough that the log panel can reach into the right-seat's
+   zone regardless of sizing -- it's a low-priority nice-to-have, so just hide it here
+   rather than fight for space with gameplay-critical seat chips */
+[data-orient="landscape"] #log { display: none; }
+[data-theme="B"][data-orient="portrait"] #hand {
   flex-wrap: wrap; overflow-x: hidden; row-gap: 18px; max-height: 168px; padding-top: 20px;
 }
 
@@ -229,9 +234,8 @@ button.ghost { background: rgba(255,255,255,.06); color: var(--ink); box-shadow:
      %-based left/right/top collapses with it. #hand-area needs it too since #hand can
      shrink-to-fit arbitrarily wide (overflow-x:auto over many unwrapped cards). */
   .cg-header, .cg-info, #hand-area, .cg-table { width: 100%; max-width: 520px; margin-left: auto; margin-right: auto; }
-}
-@media (min-width: 700px) and (orientation: landscape) {
-  .cg-header, .cg-info, #hand-area, .cg-table { max-width: 900px; }
+  [data-orient="landscape"] .cg-header, [data-orient="landscape"] .cg-info,
+  [data-orient="landscape"] #hand-area, [data-orient="landscape"] .cg-table { max-width: 900px; }
 }
 
 /* ---------- home / landing (index.html) ---------- */

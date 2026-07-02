@@ -22,6 +22,7 @@
   <header class="cg-header">
     <a class="cg-icon-btn" href="index.html" aria-label="返回">‹</a>
     <span class="cg-icon-btn" id="theme-toggle" role="button" aria-label="主题"></span>
+    <span class="cg-icon-btn" id="orient-toggle" role="button" aria-label="横竖屏">⟳</span>
     <span class="cg-icon-btn" id="sound-toggle" role="button" aria-label="声音"></span>
     <h1 class="cg-title">掼蛋</h1>
     <div class="cg-stats">
@@ -928,6 +929,9 @@ Sound.updateToggleButton();
 function syncThemeIcon(){ document.getElementById('theme-toggle').textContent = Theme.get()==='A' ? '毡' : '墨'; }
 document.getElementById('theme-toggle').onclick=()=>{ Theme.toggle(); syncThemeIcon(); };
 syncThemeIcon();
+function syncOrientIcon(){ document.getElementById('orient-toggle').classList.toggle('active', Orient.pref()!=='auto'); }
+document.getElementById('orient-toggle').onclick=()=>{ Orient.cycle(); syncOrientIcon(); };
+syncOrientIcon();
 newGame();
 </script>
 </body>
