@@ -147,17 +147,25 @@ body {
 .mini .r { font-size: 12px; } .mini .s { font-size: 11px; }
 .mini.card.wild::after { font-size: 6px; padding: 0 2px; bottom: 2px; }  /* 小堆牌里缩小徽标, 而不是隐藏(与满尺寸手牌保持一致) */
 
-/* ---------- hand ---------- */
+/* ---------- hand ----------
+   Portrait (both directions): wrap into a full grid so the whole hand is visible at a glance --
+   a scrolling single row hides most of a 25+ card hand, which defeats being able to plan a play.
+   Landscape: revert to one fanned, overlapping, horizontally-scrolling row (there's enough width
+   there for that to actually work, and it reads better than a short wrapped grid at that aspect). */
 #hand-area { flex: 0 0 auto; background: linear-gradient(to top, rgba(0,0,0,.4), transparent); padding-bottom: 4px; }
 #hand {
-  display: flex; flex-wrap: nowrap; overflow-x: auto; overflow-y: visible; align-items: flex-end;
-  justify-content: center; padding: 18px 10px 4px; -ms-overflow-style: none; scrollbar-width: none;
+  display: flex; flex-wrap: wrap; overflow: visible; align-items: flex-start;
+  justify-content: center; padding: 14px 10px 4px; gap: 5px 4px;
 }
-#hand::-webkit-scrollbar { display: none; }
-#hand .card { width: 44px; height: 64px; font-size: 14px; padding: 5px 0 0 6px; margin-left: -20px; transition: transform .12s, box-shadow .12s; cursor: pointer; }
-#hand .card:first-child { margin-left: 0; }
+#hand .card { width: 44px; height: 64px; font-size: 14px; padding: 5px 0 0 6px; transition: transform .12s, box-shadow .12s; cursor: pointer; }
 #hand .card .r { font-size: 15px; } #hand .card .s { font-size: 13px; }
 #hand .card.sel { transform: translateY(var(--card-lift)); box-shadow: 0 12px 22px -8px var(--accent), 0 0 0 2px var(--accent); }
+[data-orient="landscape"] #hand {
+  flex-wrap: nowrap; overflow-x: auto; overflow-y: visible; align-items: flex-end; gap: 0;
+  padding: 18px 10px 4px; -ms-overflow-style: none; scrollbar-width: none;
+}
+[data-orient="landscape"] #hand::-webkit-scrollbar { display: none; }
+[data-orient="landscape"] #hand .card:first-child { margin-left: 0; }
 
 /* ---------- suit palette (Shengji 亮主/反主) ---------- */
 .cg-palette { flex: 0 0 auto; padding: 4px 12px 0; }
@@ -188,13 +196,6 @@ button {
 button:disabled { opacity: .36; cursor: default; box-shadow: none; }
 button.ghost { background: rgba(255,255,255,.06); color: var(--ink); box-shadow: none; border: 1px solid var(--panel-edge); }
 
-/* ---------- log ---------- */
-#log {
-  position: absolute; top: 6px; right: 8px; width: 128px; z-index: 4;
-  font-family: var(--font-body); font-size: 10px; line-height: 1.45; color: var(--sub);
-  background: var(--chip-bg); padding: 5px 7px; border-radius: 8px; max-height: 62px; overflow: hidden;
-}
-
 /* ---------- overlay ---------- */
 #overlay {
   position: absolute; inset: 0; z-index: 30; background: rgba(6,10,14,.76); backdrop-filter: blur(3px);
@@ -219,13 +220,6 @@ button.ghost { background: rgba(255,255,255,.06); color: var(--ink); box-shadow:
 [data-orient="landscape"] .mini { width: 24px; height: 34px; }
 [data-orient="landscape"] .seat#seat1 { left: 4%; }
 [data-orient="landscape"] .seat#seat3 { right: 4%; }
-/* landscape's table is short enough that the log panel can reach into the right-seat's
-   zone regardless of sizing -- it's a low-priority nice-to-have, so just hide it here
-   rather than fight for space with gameplay-critical seat chips */
-[data-orient="landscape"] #log { display: none; }
-[data-theme="B"][data-orient="portrait"] #hand {
-  flex-wrap: wrap; overflow-x: hidden; row-gap: 18px; max-height: 168px; padding-top: 20px;
-}
 
 @media (min-width: 700px) {
   /* width:100% is required alongside max-width+auto-margins here: .cg-table's children

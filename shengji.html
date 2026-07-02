@@ -40,7 +40,6 @@
   <div class="cg-info" id="infoLine"></div>
 
   <div class="cg-table">
-    <div id="log"></div>
     <div class="cg-center" id="center-hint"></div>
     <div class="seat" id="seat2"><span class="name">对家(队友)</span><div class="count"></div></div>
     <div class="seat" id="seat1"><span class="name">左家</span><div class="count"></div></div>
@@ -1201,7 +1200,7 @@ function endDeal(){
 }
 
 /* ===== 通用 UI ===== */
-let logs=[]; function log(t){ logs.unshift(t); logs=logs.slice(0,9); document.getElementById('log').innerHTML=logs.join('<br>'); }
+let logs=[]; function log(t){ logs.unshift(t); logs=logs.slice(0,9); const el=document.getElementById('log'); if(el) el.innerHTML=logs.join('<br>'); }
 function flash(t){ log('⚠ '+t); Sound.play('warn'); }
 function showOverlay(title,body,cb,btn){ document.getElementById('ovTitle').textContent=title;
   document.getElementById('ovBody').innerHTML=body; const o=document.getElementById('overlay'); o.style.display='flex';

@@ -33,7 +33,6 @@
   <div class="cg-info" id="infoLine"></div>
 
   <div class="cg-table">
-    <div id="log"></div>
     <div class="cg-center cg-center-watermark" id="center-hint">掼蛋</div>
     <div class="seat" id="seat2"><span class="name">对家(队友)</span><div class="count"></div><div class="played"></div></div>
     <div class="seat" id="seat1"><span class="name">左家</span><div class="count"></div><div class="played"></div></div>
@@ -908,7 +907,7 @@ function updateButtons(){
   document.getElementById('btnHint').disabled=!my;
 }
 let logs=[];
-function log(t){ logs.unshift(t); logs=logs.slice(0,8); document.getElementById('log').innerHTML=logs.join('<br>'); }
+function log(t){ logs.unshift(t); logs=logs.slice(0,8); const el=document.getElementById('log'); if(el) el.innerHTML=logs.join('<br>'); }
 function flash(t){ log('⚠ '+t); Sound.play('warn'); }
 function showOverlay(title,body,cb,btn){
   document.getElementById('ovTitle').textContent=title;
