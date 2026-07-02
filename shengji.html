@@ -807,49 +807,6 @@ function takeTurn(){
 function updateControls(){ const my=phase==='play'&&trickOrder[turnPos]===0&&!gameOver;
   const bp=document.getElementById('bPlay'), bh=document.getElementById('bHint');
   if(bp) bp.disabled=!my; if(bh) bh.disabled=!my; }
-function rankVoiceName(v, level) {
-  if (v === 15) v = level;
-  if (v === 18) return '四王';
-  if (v === 17) return '大王';
-  if (v === 16) return '小王';
-  if (v === 14) return 'a';
-  if (v === 13) return 'k';
-  if (v === 12) return 'q';
-  if (v === 11) return 'j';
-  if (v === 10) return '十';
-  if (v === 9) return '九';
-  if (v === 8) return '八';
-  if (v === 7) return '七';
-  if (v === 6) return '六';
-  if (v === 5) return '五';
-  if (v === 4) return '四';
-  if (v === 3) return '三';
-  if (v === 2) return '二';
-  return '' + v;
-}
-// 返回播报片段数组(会顺序连播)；出牌报「花色+点数」，王牌报大/小王
-function getShengjiPlaySpeech(cards, turnPos, leadCombo) {
-  // 用副牌花色被主牌全压(毙)
-  if (turnPos > 0 && leadCombo && leadCombo.group !== 'T' && cards.length && cards.every(isTrump)) {
-    return ["毙了"];
-  }
-  const combo = detectCombo(cards);
-  if (combo) {
-    if (combo.type === 'single') {
-      const c = cards[0];
-      if (c.joker) return [c.joker === 'B' ? '大王' : '小王'];
-      return [SUIT_NAME[c.suit], rankVoiceName(c.rank, level)];
-    }
-    if (combo.type === 'pair') {
-      const c = cards[0];
-      if (c.joker) return ["对", c.joker === 'B' ? '大王' : '小王'];
-      return ["对", SUIT_NAME[c.suit], rankVoiceName(c.rank, level)];
-    }
-    if (combo.type === 'tractor') return ["拖拉机"];
-  }
-  if (turnPos === 0) return ["甩牌"];
-  return [];
-}
 function commit(seat,cards){
   const p=players[seat]; const ids=new Set(cards.map(c=>c.id));
   p.hand=p.hand.filter(c=>!ids.has(c.id)); p.lastShown=cards.slice();
@@ -858,12 +815,6 @@ function commit(seat,cards){
     combo=detectCombo(cards);
     if(!combo){ const tw=validateThrow(cards); if(tw.ok) combo=makeThrowCombo(cards, tw.group); }  // 甩牌
   } else combo=detectCombo(cards);
-
-  const leadCombo = trick[0] ? trick[0].combo : null;
-  const speechParts = getShengjiPlaySpeech(cards, turnPos, leadCombo);
-  if (speechParts && speechParts.length) {
-    Sound.speak(speechParts, seat);
-  }
 
   trick.push({seat,cards:cards.slice(),combo});
   log(`${NAMES[seat]} 出 ${cards.map(rankText).join('')}`);

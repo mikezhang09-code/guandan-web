@@ -630,54 +630,6 @@ function afterAction(){
   }
   currentPlayer=nextActive(currentPlayer); renderAll(); step();
 }
-function rankVoiceName(v, level) {
-  if (v === 15) v = level;
-  if (v === 18) return '四王';
-  if (v === 17) return '大王';
-  if (v === 16) return '小王';
-  if (v === 14) return 'a';
-  if (v === 13) return 'k';
-  if (v === 12) return 'q';
-  if (v === 11) return 'j';
-  if (v === 10) return '十';
-  if (v === 9) return '九';
-  if (v === 8) return '八';
-  if (v === 7) return '七';
-  if (v === 6) return '六';
-  if (v === 5) return '五';
-  if (v === 4) return '四';
-  if (v === 3) return '三';
-  if (v === 2) return '二';
-  return '' + v;
-}
-function getGuandanPlaySpeech(desc, cards, level) {
-  const t = desc.type;
-  const v = desc.value;
-  switch (t) {
-    case 'single':
-      return rankVoiceName(v, level);
-    case 'pair':
-      return "对" + rankVoiceName(v, level);
-    case 'triple':
-      return "三个" + rankVoiceName(v, level);
-    case 'fullhouse':
-      return "三带二";
-    case 'straight':
-      return "顺子";
-    case 'tube':
-      return "三连对";
-    case 'plate':
-      return "钢板";
-    case 'bomb':
-      return desc.len + "炸";
-    case 'straightflush':
-      return "同花顺";
-    case 'fourjokers':
-      return "四王炸";
-    default:
-      return descText(desc);
-  }
-}
 function applyPlay(idx,cards,desc){
   const p=players[idx]; const ids=new Set(cards.map(c=>c.id));
   p.hand=p.hand.filter(c=>!ids.has(c.id));
@@ -686,12 +638,6 @@ function applyPlay(idx,cards,desc){
   p.lastShown=cards.slice();
   log(NAMES[idx]+' 出 '+descText(desc));
   Sound.play('play');
-  
-  const parts = [getGuandanPlaySpeech(desc, cards, currentLevel)];
-  if (p.hand.length === 1) parts.push("剩一张");
-  else if (p.hand.length === 2) parts.push("剩两张");
-  Sound.speak(parts, idx);
-
   if(p.hand.length===0){ p.finished=true; finishedOrder.push(p); log('🎉 '+NAMES[idx]+' 出完!'); }
 }
 function applyPass(idx){
@@ -699,10 +645,6 @@ function applyPass(idx){
   players[idx].lastShown='pass';
   log(NAMES[idx]+' 不出');
   Sound.play('pass');
-  
-  const passPhrases = ["不出", "不要", "要不起", "过"];
-  const phrase = passPhrases[Math.floor(Math.random() * passPhrases.length)];
-  Sound.speak(phrase, idx);
 }
 
 function bombCardIds(hand){                       // 属于炸弹的牌(不可拆)
