@@ -935,11 +935,11 @@ function aiFollow(seat){
     if(c.group==='T'&&best.combo.group!=='T') return true;
     return c.group===best.combo.group && c.topVal>best.combo.topVal; };
   
-  // 队友赢牌时，是否需要垫分？
-  // 如果队友已经稳赢这一墩（后面没有对手，或者队友牌极大），我们应该垫分牌（5, 10, K）。
-  // 反之，如果后面还有对手，且对手可能大过队友，我们就不该垫分，以防被抢。
+  // 队友赢牌时，是否需要垫分？直接读还没出牌的对手手里到底有没有能大过队友的牌(全信息, 不是猜)，
+  // 而不是只用"是不是最后一家"/"是不是王牌"这种粗糙代理去判断 —— 那样会漏掉很多其实已经稳了的情况，
+  // 比如对方主牌已经出光了，却因为还没轮到最后一家就白白不敢垫分。
   const isLastPlayer = (turnPos === 3);
-  const partnerWinsDefinitively = mateWin && (isLastPlayer || best.combo.topVal >= 1005); // 王牌赢，或者最后一人
+  const partnerWinsDefinitively = mateWin && !remainingOppCanBeat(best.combo, seat);
   
   const notOvertake=v=>v<best.combo.topVal;
   let chosen=null;
@@ -1069,27 +1069,42 @@ function bestThrow(seat){
   return pick;
 }
 
+// 单个对手的手牌能不能大过给定组合(单/对/连对) —— anyOpponentBeats/remainingOppCanBeat 共用的核心比较,
+// 全信息判断(直接读手牌), 不是概率推测。
+function oppHandBeats(oppHand, combo){
+  const group=combo.group;
+  const inSuit=oppHand.filter(c=>inGroup(c,group));
+  if(inSuit.length>=combo.size){
+    if(combo.type==='single'){ if(Math.max(...inSuit.map(tval))>combo.topVal) return true; }
+    else if(combo.type==='pair'){ if(oppMaxPairVal(inSuit)>combo.topVal) return true; }
+    else { if(tractorsOf(inSuit,combo.size).some(t=>Math.max(...t.map(tval))>combo.topVal)) return true; }
+  } else if(group!=='T' && inSuit.length===0){   // 缺门才可能整手换成主牌; 凑不齐门数时必须先垫上手里现有的这门牌
+    const T=oppHand.filter(isTrump);
+    if(T.length>=combo.size){
+      if(combo.type==='single'){ if(T.length) return true; }
+      else if(combo.type==='pair'){ if(oppMaxPairVal(T)>=0) return true; }
+      else { if(tractorsOf(T,combo.size).length) return true; }
+    }
+  }
+  return false;
+}
 // 全信息判断: seat 领出这个组合(单/对/连对), 对方阵营有没有人能大过 (读全部手牌, 非概率推测；
 // 队友大过没关系，分还是自己队的，所以只看对方两家 —— 这点和 bestThrow/throwBeatable 故意不同：
 // 那两个判断的是"甩牌是否会被任何人(含队友)压下去而失败"这条独立规则，不是"我方是否会丢分"。
 function anyOpponentBeats(cards, seat){
   const combo=detectCombo(cards); if(!combo) return true;
-  const group=combo.group;
   const opps=players.filter(p=>team(p.idx)!==team(seat));
-  for(const opp of opps){
-    const inSuit=opp.hand.filter(c=>inGroup(c,group));
-    if(inSuit.length>=combo.size){
-      if(combo.type==='single'){ if(Math.max(...inSuit.map(tval))>combo.topVal) return true; }
-      else if(combo.type==='pair'){ if(oppMaxPairVal(inSuit)>combo.topVal) return true; }
-      else { if(tractorsOf(inSuit,combo.size).some(t=>Math.max(...t.map(tval))>combo.topVal)) return true; }
-    } else if(group!=='T' && inSuit.length===0){   // 缺门才可能整手换成主牌; 凑不齐门数时必须先垫上手里现有的这门牌
-      const T=opp.hand.filter(isTrump);
-      if(T.length>=combo.size){
-        if(combo.type==='single'){ if(T.length) return true; }
-        else if(combo.type==='pair'){ if(oppMaxPairVal(T)>=0) return true; }
-        else { if(tractorsOf(T,combo.size).length) return true; }
-      }
-    }
+  return opps.some(opp=>oppHandBeats(opp.hand, combo));
+}
+// 这墩里"还没轮到出牌"的对方玩家中, 有没有人手牌能大过当前最大牌 bestCombo —— 全信息判断, 用来精确
+// 判定"这墩是不是已经稳了", 而不是只靠"是不是最后一家"/"当前是不是王牌"这种粗糙代理: 那样会漏掉很多
+// 其实已经稳了的情况, 比如对方主牌已经出光了、却因为还没轮到最后一家就白白不敢垫分。
+function remainingOppCanBeat(bestCombo, seat){
+  const cT=team(seat);
+  for(let pos=turnPos+1; pos<4; pos++){
+    const s=trickOrder[pos];
+    if(team(s)===cT) continue;
+    if(oppHandBeats(players[s].hand, bestCombo)) return true;
   }
   return false;
 }
