@@ -1,92 +1,44 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-game="guandan">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>掼蛋 Guandan</title>
+<script src="theme.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=Noto+Serif+SC:wght@500;700;900&family=Sora:wght@500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css">
 <style>
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body {
-    margin: 0; font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
-    background: radial-gradient(circle at 50% 35%, #2e8b57 0%, #0f5132 60%, #08361f 100%);
-    color: #fff; height: 100vh; overflow: hidden; user-select: none;
-  }
-  #board { position: relative; width: 100%; height: 100%; }
-  .seat { position: absolute; text-align: center; }
-  .seat .name { font-size: 14px; font-weight: 600; padding: 2px 10px; border-radius: 12px;
-    background: rgba(0,0,0,.3); display: inline-block; }
-  .seat.turn .name { background: #ffcc00; color: #222; box-shadow: 0 0 12px #ffcc00; }
-  .seat .count { font-size: 12px; opacity: .85; margin-top: 2px; }
-  /* seats */
-  #seat2 { top: 8px; left: 50%; transform: translateX(-50%); }      /* partner top */
-  #seat1 { top: 38%; left: 10px; transform: translateY(-50%); }     /* left */
-  #seat3 { top: 38%; right: 10px; transform: translateY(-50%); }    /* right */
-  #seat0 { bottom: 150px; left: 50%; transform: translateX(-50%); display:none; }
-
-  .played { margin-top: 4px; min-height: 56px; display: flex; justify-content: center; gap: 1px; }
-  .played .mini { width: 30px; height: 44px; }
-  .played .pass { font-size: 18px; color: #ffd; opacity:.9; padding-top:12px; }
-
-  .card {
-    background: #fff; color: #222; border-radius: 6px; border: 1px solid #999;
-    display: inline-flex; flex-direction: column; align-items: center; justify-content: flex-start;
-    font-weight: 700; position: relative; box-shadow: 0 1px 3px rgba(0,0,0,.4);
-  }
-  .card.red { color: #d40000; }
-  .card .r { line-height: 1; }
-  .card .s { line-height: 1; }
-  .mini { width: 34px; height: 50px; font-size: 13px; padding-top:3px; }
-  .mini .r { font-size: 14px; }
-  .mini .s { font-size: 13px; }
-  .back { background: repeating-linear-gradient(45deg,#1a3a8f,#1a3a8f 6px,#2451c4 6px,#2451c4 12px);
-    border:1px solid #0b1f54; }
-
-  #hand-area { position: absolute; bottom: 0; left: 0; right: 0; padding: 6px 8px 10px;
-    background: linear-gradient(to top, rgba(0,0,0,.45), transparent); }
-  #hand { display: flex; justify-content: center; flex-wrap: wrap; min-height: 96px; }
-  #hand .card {
-    width: 56px; height: 84px; font-size: 16px; margin-left: -18px; padding-top: 4px;
-    transition: transform .12s; cursor: pointer;
-  }
-  #hand .card:first-child { margin-left: 0; }
-  #hand .card .r { font-size: 18px; }
-  #hand .card .s { font-size: 17px; }
-  #hand .card.sel { transform: translateY(-18px); box-shadow: 0 0 8px #ffcc00; }
-  #hand .card.wild::after { content:"百搭"; position:absolute; bottom:2px; font-size:8px;
-    color:#fff; background:#d40000; border-radius:4px; padding:0 2px; font-weight:400; }
-
-  #controls { display: flex; justify-content: center; gap: 10px; margin-top: 6px; align-items:center; }
-  button {
-    font-family: inherit; font-size: 15px; font-weight: 600; padding: 9px 18px; border: none;
-    border-radius: 22px; cursor: pointer; color: #222; background: #ffd54a; box-shadow: 0 2px 6px rgba(0,0,0,.4);
-  }
-  button:disabled { opacity: .4; cursor: default; }
-  button.ghost { background: rgba(255,255,255,.85); }
-
-  #status { position: absolute; top: 6px; left: 8px; font-size: 12px; line-height: 1.6;
-    background: rgba(0,0,0,.35); padding: 6px 10px; border-radius: 8px; }
-  #status b { color: #ffd54a; }
-  #log { position: absolute; top: 6px; right: 8px; width: 160px; font-size: 11px; line-height: 1.5;
-    background: rgba(0,0,0,.3); padding: 6px 8px; border-radius: 8px; max-height: 130px; overflow: hidden; }
-
-  #overlay { position: absolute; inset: 0; background: rgba(0,0,0,.72); display: none;
-    flex-direction: column; align-items: center; justify-content: center; z-index: 10; text-align: center; }
-  #overlay h2 { margin: 0 0 12px; }
-  #overlay p { margin: 4px; font-size: 15px; }
-  #center-hint { position:absolute; top:46%; left:50%; transform:translate(-50%,-50%);
-    font-size:13px; opacity:.55; pointer-events:none; }
+  /* 本文件只保留座位/牌堆的具体坐标 —— 视觉 token 与共用组件样式都在 theme.css 里 */
+  #seat2 { top: 6px; left: 50%; transform: translateX(-50%); }      /* partner top */
+  #seat1 { top: 38%; left: 4%; transform: translateY(-50%); }       /* left */
+  #seat3 { top: 38%; right: 4%; transform: translateY(-50%); }      /* right */
+  #seat0 { bottom: 2%; left: 50%; transform: translateX(-50%); display:none; }
 </style>
 </head>
 <body>
 <div id="board">
-  <div id="status"></div>
-  <div id="log"></div>
-  <div id="center-hint">掼蛋</div>
+  <header class="cg-header">
+    <a class="cg-icon-btn" href="index.html" aria-label="返回">‹</a>
+    <span class="cg-icon-btn" id="theme-toggle" role="button" aria-label="主题"></span>
+    <span class="cg-icon-btn" id="sound-toggle" role="button" aria-label="声音"></span>
+    <h1 class="cg-title">掼蛋</h1>
+    <div class="cg-stats">
+      <div class="cg-stat"><span class="cg-stat-lbl">你方</span><span class="cg-stat-val" id="lvlYou">2</span></div>
+      <div class="cg-stat"><span class="cg-stat-lbl">对方</span><span class="cg-stat-val" id="lvlOpp">2</span></div>
+    </div>
+  </header>
+  <div class="cg-info" id="infoLine"></div>
 
-  <div class="seat" id="seat2"><span class="name">对家(队友)</span><div class="count"></div><div class="played"></div></div>
-  <div class="seat" id="seat1"><span class="name">左家</span><div class="count"></div><div class="played"></div></div>
-  <div class="seat" id="seat3"><span class="name">右家</span><div class="count"></div><div class="played"></div></div>
-  <div class="seat" id="seat0"><div class="played"></div></div>
+  <div class="cg-table">
+    <div id="log"></div>
+    <div class="cg-center cg-center-watermark" id="center-hint">掼蛋</div>
+    <div class="seat" id="seat2"><span class="name">对家(队友)</span><div class="count"></div><div class="played"></div></div>
+    <div class="seat" id="seat1"><span class="name">左家</span><div class="count"></div><div class="played"></div></div>
+    <div class="seat" id="seat3"><span class="name">右家</span><div class="count"></div><div class="played"></div></div>
+    <div class="seat" id="seat0"><div class="played"></div></div>
+  </div>
 
   <div id="hand-area">
     <div id="hand"></div>
@@ -99,15 +51,11 @@
     </div>
   </div>
 
-  <div id="overlay">
+  <div id="overlay"><div class="cg-modal">
     <h2 id="ovTitle"></h2>
     <div id="ovBody"></div>
-    <button id="ovBtn" style="margin-top:16px;">继续</button>
-  </div>
-  <div style="position:absolute;bottom:8px;left:10px;display:flex;gap:16px;z-index:5;font-size:12px;">
-    <a href="index.html" style="color:#cfe;text-decoration:none;">🏠 选择游戏</a>
-    <span id="sound-toggle" style="color:#cfe;cursor:pointer;user-select:none;">🔊 声音</span>
-  </div>
+    <button id="ovBtn">继续</button>
+  </div></div>
 </div>
 
 <script src="voices.js"></script>
@@ -140,7 +88,7 @@ const Sound = {
   updateToggleButton() {
     const btn = document.getElementById('sound-toggle');
     if (btn) {
-      btn.textContent = this.muted ? '🔇 静音' : '🔊 声音';
+      btn.textContent = this.muted ? '🔇' : '🔊';
     }
   },
   dealSequence() {
@@ -939,10 +887,12 @@ function renderAll(){
   if(players[0].lastShown==='pass'){ const s=document.createElement('div'); s.className='pass'; s.textContent='不出'; pl.appendChild(s); }
   else if(Array.isArray(players[0].lastShown)) players[0].lastShown.forEach(c=>pl.appendChild(cardEl(c,'mini')));
   renderHand();
-  document.getElementById('status').innerHTML=
-    `级牌(主牌)：<b>${valueName(currentLevel)}</b><br>`+
-    `你方等级：<b>${valueName(teamLevels[0])}</b>${teamLevels[0]===14&&aFails[0]?'(打A第'+(aFails[0]+1)+'次)':''}　对方：<b>${valueName(teamLevels[1])}</b>${teamLevels[1]===14&&aFails[1]?'(打A第'+(aFails[1]+1)+'次)':''}<br>`+
-    `当前：<b>${NAMES[currentPlayer]}</b>${lastPlay?'　需压：'+descText(lastPlay.desc):'　(自由出牌)'}`;
+  document.getElementById('lvlYou').textContent = valueName(teamLevels[0]) + (teamLevels[0]===14&&aFails[0]?'('+(aFails[0]+1)+')':'');
+  document.getElementById('lvlOpp').textContent = valueName(teamLevels[1]) + (teamLevels[1]===14&&aFails[1]?'('+(aFails[1]+1)+')':'');
+  const turn = gameOver ? '' : (currentPlayer===0 ? ' · 轮到你出牌' : ' · 轮到'+NAMES[currentPlayer]);
+  document.getElementById('infoLine').textContent =
+    `级牌 ${valueName(currentLevel)}` + (lastPlay ? (' · 需压：'+descText(lastPlay.desc)) : ' · 自由出牌') + turn;
+  document.getElementById('center-hint').style.display = lastPlay ? 'none' : (gameOver ? 'none' : 'block');
 }
 function updateButtons(){
   if(returnMode){
@@ -975,6 +925,9 @@ document.getElementById('btnSort').onclick=()=>{ sortHand(players[0].hand); rend
 document.getElementById('btnHelp').onclick=()=>window.open('help.html','_blank');
 document.getElementById('sound-toggle').onclick=()=>Sound.toggleMute();
 Sound.updateToggleButton();
+function syncThemeIcon(){ document.getElementById('theme-toggle').textContent = Theme.get()==='A' ? '毡' : '墨'; }
+document.getElementById('theme-toggle').onclick=()=>{ Theme.toggle(); syncThemeIcon(); };
+syncThemeIcon();
 newGame();
 </script>
 </body>

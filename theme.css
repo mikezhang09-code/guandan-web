@@ -1,0 +1,286 @@
+/* ===== 共享设计系统 (毡影 Feltwork / 墨玉 Ink & Jade) =====
+   由 theme.js 在 <html> 上设置 data-theme="A"|"B"；每个页面自带 data-game="guandan"|"shengji"|"home"。
+   两个 game 文件仍然各自内联全部规则逻辑 (deck/combo/AI) —— 这里只是把重复的视觉 token 抽成共享文件，
+   与两个游戏早已共用的 voices.js 是同一惯例, 不违反"各文件自包含"的规则(那条规则针对的是玩法逻辑)。 */
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+/* ---------- Direction A: 毡影 Feltwork ---------- */
+[data-theme="A"] {
+  --felt-guandan: radial-gradient(125% 92% at 50% 20%, #2f875d 0%, #17603e 46%, #0a3623 100%);
+  --felt-shengji: radial-gradient(125% 92% at 50% 20%, #327089 0%, #1c455c 46%, #0b2637 100%);
+  --felt-home:    radial-gradient(125% 92% at 50% 24%, #276244 0%, #123c29 55%, #0a251b 100%);
+  --accent: #E7C77E; --accent-deep: #C9A65A; --accent-soft: rgba(231,199,126,.16);
+  --ink: #FBF5E8; --sub: rgba(251,245,232,.68);
+  --card-face: #FBF6EA; --card-red: #BE3B2E; --card-black: #2C353D;
+  --card-edge: rgba(30,20,0,.22); --card-radius: 12px;
+  --panel: rgba(9,26,18,.55); --panel-edge: rgba(231,199,126,.3);
+  --font-display: 'Noto Serif SC', serif; --font-body: 'Noto Sans SC', sans-serif; --font-rank: 'Noto Serif SC', serif;
+  --chip-bg: rgba(0,0,0,.34); --turn-bg: #E7C77E; --turn-ink: #2a3320; --btn-radius: 22px;
+  --trump-face: #FCF3D3; --trump-edge: rgba(190,140,20,.55); --point-dot: #0E9C7E;
+  --title-weight: 700; --card-lift: -16px;
+}
+/* ---------- Direction B: 墨玉 Ink & Jade ---------- */
+[data-theme="B"] {
+  --felt-guandan: radial-gradient(130% 80% at 50% 0%, #131c19 0%, #0f1216 60%);
+  --felt-shengji: radial-gradient(130% 80% at 50% 0%, #141a24 0%, #0f1216 60%);
+  --felt-home: var(--felt-guandan);
+  --accent: #2BD4A8; --accent-deep: #2BD4A8; --accent-soft: rgba(43,212,168,.15);
+  --ink: #EDEFF3; --sub: rgba(237,239,243,.5);
+  --card-face: #F5F6F8; --card-red: #E5484D; --card-black: #181C24;
+  --card-edge: rgba(0,0,0,.14); --card-radius: 9px;
+  --panel: #181B21; --panel-edge: rgba(255,255,255,.09);
+  --font-display: 'Noto Sans SC', sans-serif; --font-body: 'Noto Sans SC', sans-serif; --font-rank: 'Space Grotesk', 'Sora', sans-serif;
+  --chip-bg: rgba(255,255,255,.07); --turn-bg: #2BD4A8; --turn-ink: #0b0e12; --btn-radius: 12px;
+  --trump-face: #F5F6F8; --trump-edge: #2BD4A8; --point-dot: #2BD4A8;
+  --title-weight: 900; --card-lift: -16px;
+}
+[data-theme="B"][data-game="shengji"] { --accent: #5B9CFF; --accent-deep: #5B9CFF; --accent-soft: rgba(91,156,255,.15); --turn-bg: #5B9CFF; --trump-edge: #5B9CFF; --point-dot: #5B9CFF; }
+
+/* per-game felt axis, both directions */
+[data-game="guandan"] { --felt: var(--felt-guandan); }
+[data-game="shengji"] { --felt: var(--felt-shengji); }
+[data-game="home"]    { --felt: var(--felt-home); }
+
+/* index.html shows both games' accents on one page at once -> scope via existing .gd/.sj classes */
+[data-theme="A"] .game.gd { --accent: #8FE3B4; }
+[data-theme="A"] .game.sj { --accent: #8FD0E3; }
+[data-theme="B"] .game.gd { --accent: #2BD4A8; }
+[data-theme="B"] .game.sj { --accent: #5B9CFF; }
+
+/* ---------- base ---------- */
+html, body { height: 100vh; height: 100dvh; }
+body {
+  margin: 0; overflow: hidden; user-select: none;
+  font-family: var(--font-body); color: var(--ink);
+  background: var(--felt);
+}
+#board { position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; }
+
+/* ---------- header ---------- */
+.cg-header { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 10px 12px 4px; }
+.cg-icon-btn {
+  border: none; background: var(--chip-bg); color: var(--ink); width: 32px; height: 32px;
+  border-radius: 9px; font-size: 15px; display: flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; cursor: pointer; text-decoration: none; font-family: var(--font-body);
+}
+.cg-title {
+  flex: 1; text-align: center; font-family: var(--font-display); font-weight: var(--title-weight);
+  font-size: 16px; color: var(--ink); letter-spacing: .04em;
+}
+.cg-stats { flex: 0 0 auto; display: flex; gap: 10px; }
+.cg-stat { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
+.cg-stat-lbl { font-family: var(--font-body); font-size: 8.5px; color: var(--sub); letter-spacing: .08em; }
+.cg-stat-val { font-family: var(--font-rank); font-size: 13px; font-weight: 700; color: var(--accent); }
+
+.cg-info { flex: 0 0 auto; text-align: center; padding: 2px 12px 4px; font-family: var(--font-body); font-size: 11.5px; color: var(--sub); min-height: 16px; }
+
+/* ---------- table ---------- */
+.cg-table { position: relative; flex: 1; min-height: 0; }
+.cg-center {
+  position: absolute; top: 45%; left: 50%; transform: translate(-50%,-50%); z-index: 1;
+  text-align: center; pointer-events: none; font-family: var(--font-display);
+}
+.cg-center.cg-center-watermark { font-size: 32px; font-weight: 700; color: rgba(255,255,255,.06); }
+.cg-center-ring {
+  width: 62px; height: 62px; margin: 0 auto; border-radius: 50%; border: 2px solid var(--accent-soft);
+  display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 16px; color: var(--ink);
+}
+.cg-center-ring.declared { color: var(--accent); box-shadow: 0 0 16px var(--accent); }
+.cg-center-lbl { font-family: var(--font-body); font-size: 10px; color: var(--sub); margin-top: 6px; letter-spacing: .06em; }
+.cg-center-bar { width: 84px; height: 3px; border-radius: 3px; background: rgba(255,255,255,.12); margin: 6px auto 0; overflow: hidden; }
+.cg-center-bar > div { height: 100%; background: var(--accent); transition: width .13s linear; }
+
+.seat { position: absolute; text-align: center; z-index: 4; }
+.seat .name {
+  font-family: var(--font-body); font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 11px;
+  background: var(--chip-bg); color: var(--ink); display: inline-block; white-space: nowrap;
+}
+.seat .name.dealer::after { content: " 庄"; color: var(--accent); }
+.seat.turn .name { background: var(--turn-bg); color: var(--turn-ink); box-shadow: 0 0 12px var(--accent); }
+.seat .count { font-family: var(--font-body); font-size: 10.5px; color: var(--sub); margin-top: 3px; }
+.seat .decl-badge {
+  margin-top: 4px; display: inline-flex; align-items: center; gap: 3px;
+  font-family: var(--font-body); font-size: 10.5px; font-weight: 700; color: var(--accent);
+  background: rgba(0,0,0,.4); border: 1px solid var(--accent); border-radius: 9px; padding: 2px 8px;
+  box-shadow: 0 0 8px var(--accent-soft);
+}
+.seat .decl-badge.red { color: var(--card-red); }
+
+/* base shape works unmodified for Guandan (.played nests inside .seat, normal flow,
+   mini cards appended directly as children); Shengji overrides flex-direction:column
+   + position:absolute per-#play{i} in its own file (cards live in a nested .played-row
+   there, so the badge can stack below them) — see shengji.html's own <style> block. */
+.played { min-height: 44px; z-index: 3; display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 1px; }
+.played-row { display: flex; justify-content: center; gap: 1px; flex-wrap: wrap; transition: filter .15s; }
+.played.win .played-row { filter: drop-shadow(0 0 9px var(--accent)) drop-shadow(0 0 3px var(--accent)); }
+.played.leading .played-row { filter: drop-shadow(0 0 6px var(--accent)); }
+.played .pass { font-family: var(--font-body); font-size: 12px; font-weight: 700; color: var(--sub); background: var(--chip-bg); padding: 3px 9px; border-radius: 10px; }
+.cg-badge {
+  font-family: var(--font-body); font-size: 10px; font-weight: 700; border-radius: 9px; padding: 2px 8px;
+  margin-top: 5px; white-space: nowrap;
+}
+.cg-badge.leading { color: var(--accent); background: rgba(0,0,0,.32); border: 1px solid var(--accent); }
+.cg-badge.win { color: var(--turn-ink); background: var(--turn-bg); box-shadow: 0 0 12px var(--accent); }
+
+/* ---------- cards ---------- */
+.card {
+  background: var(--card-face); color: var(--card-black); border-radius: var(--card-radius);
+  border: 1px solid var(--card-edge); display: inline-flex; flex-direction: column;
+  align-items: flex-start; justify-content: flex-start; font-weight: 700; position: relative;
+  font-family: var(--font-rank); box-shadow: 0 2px 5px rgba(0,0,0,.4); flex: 0 0 auto;
+}
+.card.red { color: var(--card-red); }
+.card .r { line-height: 1; }
+.card .s { line-height: 1.05; }
+[data-theme="A"] .card.tr { background: var(--trump-face); border-color: var(--trump-edge); }
+[data-theme="B"] .card.tr::before { content: ""; position: absolute; left: 0; top: 4px; bottom: 4px; width: 3px; border-radius: 3px; background: var(--accent); }
+.card.pt::after { content: ""; position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--point-dot); }
+.card.wild::after {
+  content: "百搭"; position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%);
+  font-size: 8px; font-weight: 500; font-family: var(--font-body); color: #fff;
+  background: var(--card-red); border-radius: 3px; padding: 0 3px; letter-spacing: .04em;
+}
+.mini { width: 26px; height: 37px; font-size: 12px; padding: 3px 0 0 4px; }
+.mini .r { font-size: 12px; } .mini .s { font-size: 11px; }
+.mini.card.wild::after { font-size: 6px; padding: 0 2px; bottom: 2px; }  /* 小堆牌里缩小徽标, 而不是隐藏(与满尺寸手牌保持一致) */
+
+/* ---------- hand ---------- */
+#hand-area { flex: 0 0 auto; background: linear-gradient(to top, rgba(0,0,0,.4), transparent); padding-bottom: 4px; }
+#hand {
+  display: flex; flex-wrap: nowrap; overflow-x: auto; overflow-y: visible; align-items: flex-end;
+  justify-content: center; padding: 18px 10px 4px; -ms-overflow-style: none; scrollbar-width: none;
+}
+#hand::-webkit-scrollbar { display: none; }
+#hand .card { width: 44px; height: 64px; font-size: 14px; padding: 5px 0 0 6px; margin-left: -20px; transition: transform .12s, box-shadow .12s; cursor: pointer; }
+#hand .card:first-child { margin-left: 0; }
+#hand .card .r { font-size: 15px; } #hand .card .s { font-size: 13px; }
+#hand .card.sel { transform: translateY(var(--card-lift)); box-shadow: 0 12px 22px -8px var(--accent), 0 0 0 2px var(--accent); }
+
+/* ---------- suit palette (Shengji 亮主/反主) ---------- */
+.cg-palette { flex: 0 0 auto; padding: 4px 12px 0; }
+.cg-palette-hint { font-family: var(--font-body); font-size: 10.5px; color: var(--sub); text-align: center; margin-bottom: 5px; letter-spacing: .05em; }
+.cg-palette-hint.active { color: var(--accent); font-weight: 700; }
+.cg-palette-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.suitTile {
+  width: 46px; height: 58px; border-radius: 10px; padding: 0; flex: 0 0 auto;
+  border: 1px solid var(--panel-edge); background: rgba(255,255,255,.03); color: rgba(255,255,255,.22);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  font-family: var(--font-rank); cursor: default; opacity: .5; box-shadow: none;
+}
+.suitTile.avail { background: var(--card-face); color: var(--card-black); opacity: 1; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,.35); }
+.suitTile.avail.red { color: var(--card-red); }
+.suitTile.active { border-color: var(--accent); border-width: 2px; box-shadow: 0 0 14px var(--accent); }
+.suitTile .tt-r { font-size: 12px; font-weight: 700; line-height: 1; }
+.suitTile .tt-s { font-size: 21px; line-height: 1; }
+.suitTile .tt-l { font-size: 8px; font-family: var(--font-body); font-weight: 600; letter-spacing: .04em; color: var(--sub); }
+.suitTile.avail .tt-l { color: var(--sub); }
+
+/* ---------- controls ---------- */
+#controls { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding: 6px 12px 14px; }
+button {
+  font-family: var(--font-body); font-weight: 700; font-size: 13.5px; padding: 9px 16px; border: none;
+  border-radius: var(--btn-radius); cursor: pointer; color: var(--turn-ink); background: var(--turn-bg);
+  box-shadow: 0 4px 12px -3px var(--accent-soft); letter-spacing: .02em;
+}
+button:disabled { opacity: .36; cursor: default; box-shadow: none; }
+button.ghost { background: rgba(255,255,255,.06); color: var(--ink); box-shadow: none; border: 1px solid var(--panel-edge); }
+
+/* ---------- log ---------- */
+#log {
+  position: absolute; top: 6px; right: 8px; width: 128px; z-index: 4;
+  font-family: var(--font-body); font-size: 10px; line-height: 1.45; color: var(--sub);
+  background: var(--chip-bg); padding: 5px 7px; border-radius: 8px; max-height: 62px; overflow: hidden;
+}
+
+/* ---------- overlay ---------- */
+#overlay {
+  position: absolute; inset: 0; z-index: 30; background: rgba(6,10,14,.76); backdrop-filter: blur(3px);
+  display: none; align-items: center; justify-content: center; padding: 24px;
+}
+.cg-modal {
+  width: 100%; max-width: 320px; background: var(--panel); border: 1px solid var(--panel-edge);
+  border-radius: 20px; padding: 24px 22px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,.5);
+}
+.cg-modal h2 { margin: 0 0 12px; font-family: var(--font-display); font-weight: var(--title-weight); font-size: 19px; color: var(--ink); }
+.cg-modal #ovBody { font-family: var(--font-body); font-size: 12.5px; color: var(--sub); line-height: 1.6; }
+.cg-modal button { margin-top: 18px; }
+
+/* ---------- responsive ---------- */
+@media (orientation: landscape) {
+  #hand .card { width: 40px; height: 58px; margin-left: -18px; }
+  #hand .card .r { font-size: 14px; } #hand .card .s { font-size: 12px; }
+  .mini { width: 24px; height: 34px; }
+  .seat#seat1 { left: 4%; }
+  .seat#seat3 { right: 4%; }
+  /* landscape's table is short enough that the log panel can reach into the right-seat's
+     zone regardless of sizing -- it's a low-priority nice-to-have, so just hide it here
+     rather than fight for space with gameplay-critical seat chips */
+  #log { display: none; }
+}
+[data-theme="B"] #hand.wrap {
+  flex-wrap: wrap; overflow-x: hidden; row-gap: 18px; max-height: 168px; padding-top: 20px;
+}
+
+@media (min-width: 700px) {
+  /* width:100% is required alongside max-width+auto-margins here: .cg-table's children
+     are all position:absolute (seats/piles/log), so it has no in-flow content to give it
+     a shrink-to-fit size -- without an explicit width it collapses to 0 and every child's
+     %-based left/right/top collapses with it. #hand-area needs it too since #hand can
+     shrink-to-fit arbitrarily wide (overflow-x:auto over many unwrapped cards). */
+  .cg-header, .cg-info, #hand-area, .cg-table { width: 100%; max-width: 520px; margin-left: auto; margin-right: auto; }
+}
+@media (min-width: 700px) and (orientation: landscape) {
+  .cg-header, .cg-info, #hand-area, .cg-table { max-width: 900px; }
+}
+
+/* ---------- home / landing (index.html) ---------- */
+.cg-home-header { flex: 0 0 auto; display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px 0; }
+.cg-theme-switch { display: inline-flex; background: var(--chip-bg); border-radius: 11px; padding: 2px; gap: 2px; }
+.segBtn {
+  border: none; background: transparent; color: var(--sub); font-family: var(--font-body); font-weight: 700;
+  font-size: 11.5px; padding: 6px 11px; border-radius: 9px; cursor: pointer; box-shadow: none;
+}
+.segBtn.active { background: var(--accent); color: var(--turn-ink); }
+.cg-kicker { font-family: var(--font-body); font-size: 11px; letter-spacing: .24em; color: var(--sub); margin-bottom: 6px; }
+.cg-hometitle { font-family: var(--font-display); font-weight: 900; font-size: 34px; color: var(--ink); letter-spacing: .03em; line-height: 1.05; margin: 0; }
+.cg-homesub { font-family: var(--font-body); font-size: 12px; color: var(--sub); margin-top: 6px; }
+[data-theme="B"] .cg-hometitle { font-size: 40px; }
+.cg-titleblock { padding: 10px 24px 6px; flex: 0 0 auto; }
+[data-theme="A"] .cg-titleblock { text-align: center; }
+[data-theme="B"] .cg-titleblock { text-align: left; padding-top: 16px; }
+.cards { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding: 10px 22px 22px; }
+@media (min-width: 700px) { .cards { flex-direction: row; align-items: stretch; } }
+.cards::-webkit-scrollbar { display: none; }
+
+.game { flex: 1; cursor: pointer; text-decoration: none; color: var(--ink); position: relative; overflow: hidden; display: block; }
+[data-theme="A"] .game {
+  border-radius: 18px; padding: 20px 20px 18px; border: 1px solid var(--panel-edge);
+  box-shadow: 0 10px 26px rgba(0,0,0,.35);
+}
+[data-theme="A"] .game.gd { background: linear-gradient(150deg, rgba(46,132,90,.55), rgba(12,54,35,.5)); }
+[data-theme="A"] .game.sj { background: linear-gradient(150deg, rgba(50,112,137,.55), rgba(11,54,72,.5)); }
+[data-theme="B"] .game {
+  border-radius: 16px; padding: 22px 20px 20px; background: var(--panel);
+  border: 1px solid var(--panel-edge); border-left: 3px solid var(--accent);
+}
+[data-theme="B"] .game .watermark { display: none; }
+.game .watermark { position: absolute; right: 12px; top: 6px; font-size: 60px; opacity: .12; font-family: var(--font-rank); }
+[data-theme="A"] .game .idx { display: none; }
+.game .idx { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 13px; color: var(--accent); letter-spacing: .1em; }
+.game h2 { font-family: var(--font-display); font-weight: 900; margin: 4px 0 4px; letter-spacing: .03em; }
+[data-theme="A"] .game h2 { font-size: 30px; }
+[data-theme="B"] .game h2 { font-size: 26px; margin-top: 6px; }
+.game .tag { font-family: var(--font-body); font-size: 12px; font-weight: 700; margin: 0 0 8px; }
+[data-theme="A"] .game .tag { color: var(--accent); }
+[data-theme="B"] .game .tag { color: var(--sub); font-size: 11.5px; letter-spacing: .04em; }
+.game p { font-family: var(--font-body); font-size: 12px; color: var(--sub); line-height: 1.6; margin: 0; max-width: 260px; }
+[data-theme="B"] .game p { margin-top: 12px; }
+.game .cta {
+  margin-top: 14px; display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 700;
+}
+[data-theme="A"] .game .cta { color: var(--turn-ink); background: var(--accent); padding: 7px 14px; border-radius: 20px; }
+[data-theme="B"] .game .cta { color: var(--accent); font-family: 'Space Grotesk', sans-serif; }
+.cg-foot { flex: 0 0 auto; text-align: center; padding: 0 0 16px; font-family: var(--font-body); font-size: 11px; color: var(--sub); }
+.cg-foot a { color: var(--accent); }

@@ -1,96 +1,67 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-game="shengji">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>升级 · 拖拉机</title>
+<script src="theme.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=Noto+Serif+SC:wght@500;700;900&family=Sora:wght@500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css">
 <style>
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body { margin:0; font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
-    background: radial-gradient(circle at 50% 35%, #355c7d 0%, #1c3b54 60%, #102536 100%);
-    color:#fff; height:100vh; overflow:hidden; user-select:none; }
-  #board { position:relative; width:100%; height:100%; }
-  .seat { position:absolute; text-align:center; }
-  .seat .name { font-size:14px; font-weight:600; padding:2px 10px; border-radius:12px;
-    background:rgba(0,0,0,.3); display:inline-block; }
-  .seat .name.dealer::after { content:" 庄"; color:#ffd54a; }
-  .seat.turn .name { background:#ffcc00; color:#222; box-shadow:0 0 12px #ffcc00; }
-  .seat .count { font-size:12px; opacity:.85; margin-top:2px; }
-  #seat2 { top:8px; left:50%; transform:translateX(-50%); }
-  #seat1 { top:34%; left:10px; transform:translateY(-50%); }
-  #seat3 { top:34%; right:10px; transform:translateY(-50%); }
-  #seat0 { bottom:150px; left:50%; transform:translateX(-50%); }
-  /* 出牌区集中到牌桌中央(各家朝中间打), 一眼看清整体出牌 */
-  .played { position:absolute; min-height:56px; display:flex; justify-content:center;
-    gap:2px; flex-wrap:wrap; max-width:min(230px,42vw); z-index:3; }
-  #play2 { top:23%; left:50%; transform:translateX(-50%); }
-  #play0 { bottom:168px; left:50%; transform:translateX(-50%); }
-  #play1 { top:51%; left:24%; transform:translate(-50%,-50%); }
-  #play3 { top:51%; right:24%; transform:translate(50%,-50%); }
-  .played.win { filter:drop-shadow(0 0 8px #ffd54a); }
-  .card { background:#fff; color:#222; border-radius:6px; border:1px solid #999;
-    display:inline-flex; flex-direction:column; align-items:center; justify-content:flex-start;
-    font-weight:700; position:relative; box-shadow:0 1px 3px rgba(0,0,0,.4); }
-  .card.red { color:#d40000; }
-  .card.tr { background:#fff7d6; border-color:#e0a800; }
-  .card.pt::before { content:"·"; position:absolute; top:0; right:3px; color:#0a8; font-size:16px; }
-  .mini { width:40px; height:60px; font-size:16px; padding-top:4px; }
-  .mini .r { font-size:18px; } .mini .s { font-size:16px; }
-  #hand-area { position:absolute; bottom:0; left:0; right:0; padding:6px 8px 10px;
-    background:linear-gradient(to top, rgba(0,0,0,.45), transparent); }
-  #hand { display:flex; justify-content:center; flex-wrap:wrap; min-height:92px; }
-  #hand .card { width:50px; height:80px; font-size:16px; margin-left:-16px; padding-top:4px; transition:transform .12s; cursor:pointer; }
-  #hand .card:first-child { margin-left:0; }
-  #hand .card .r { font-size:18px; } #hand .card .s { font-size:17px; }
-  #hand .card.sel { transform:translateY(-16px); box-shadow:0 0 8px #ffcc00; }
-  #controls { display:flex; justify-content:center; gap:8px; margin-top:6px; align-items:center; flex-wrap:wrap; }
-  button { font-family:inherit; font-size:15px; font-weight:600; padding:9px 16px; border:none;
-    border-radius:22px; cursor:pointer; color:#222; background:#ffd54a; box-shadow:0 2px 6px rgba(0,0,0,.4); }
-  button:disabled { opacity:.4; cursor:default; }
-  button.ghost { background:rgba(255,255,255,.85); }
-  button.suit { font-size:18px; padding:9px 14px; }
-  button.red { color:#d40000; }
-  #status { position:absolute; top:6px; left:8px; font-size:12px; line-height:1.6;
-    background:rgba(0,0,0,.35); padding:6px 10px; border-radius:8px; }
-  #status b { color:#ffd54a; }
-  #log { position:absolute; top:6px; right:8px; width:158px; font-size:11px; line-height:1.5;
-    background:rgba(0,0,0,.3); padding:6px 8px; border-radius:8px; max-height:130px; overflow:hidden; }
-  #overlay { position:absolute; inset:0; background:rgba(0,0,0,.72); display:none;
-    flex-direction:column; align-items:center; justify-content:center; z-index:10; text-align:center; padding:20px; }
-  #overlay h2 { margin:0 0 12px; } #overlay p { margin:4px; font-size:15px; }
-  #center-hint { position:absolute; top:47%; left:50%; transform:translate(-50%,-50%); font-size:13px; opacity:.5; pointer-events:none; }
-  #statusLinks { margin-top:6px; display:flex; gap:14px; }
-  #statusLinks a, #statusLinks span { color:#cfe; font-size:12px; text-decoration:none; cursor:pointer; user-select:none; }
+  /* 本文件只保留座位/牌堆的具体坐标, 以及本页独有的结构(出牌区独立于座位、按列堆叠卡牌+徽标)。
+     视觉 token 与共用组件样式都在 theme.css 里。 */
+  #seat2 { top:6px; left:50%; transform:translateX(-50%); }
+  #seat1 { top:37%; left:6%; transform:translateY(-50%); }
+  #seat3 { top:37%; right:6%; transform:translateY(-50%); }
+  #seat0 { bottom:3%; left:50%; transform:translateX(-50%); }
+  /* 出牌区集中到牌桌中央(各家朝中间打), 独立于座位定位; 按列堆叠: 牌行在上, 徽标(当前最大/赢墩)在下 */
+  .played { position:absolute; flex-direction:column; align-items:center; max-width:min(230px,42vw); }
+  #play2 { top:20%; left:50%; transform:translateX(-50%); }
+  #play0 { bottom:22%; left:50%; transform:translateX(-50%); }
+  #play1 { top:46%; left:13%; transform:translateY(-50%); }
+  #play3 { top:46%; right:13%; transform:translateY(-50%); }
 </style>
 </head>
 <body>
 <div id="board">
-  <div id="status">
-    <div id="statusText"></div>
-    <div id="statusLinks">
-      <a href="index.html">🏠 选择游戏</a>
-      <span id="sound-toggle">🔊 声音</span>
+  <header class="cg-header">
+    <a class="cg-icon-btn" href="index.html" aria-label="返回">‹</a>
+    <span class="cg-icon-btn" id="theme-toggle" role="button" aria-label="主题"></span>
+    <span class="cg-icon-btn" id="sound-toggle" role="button" aria-label="声音"></span>
+    <h1 class="cg-title">升级 · 拖拉机</h1>
+    <div class="cg-stats">
+      <div class="cg-stat"><span class="cg-stat-lbl">主牌</span><span class="cg-stat-val" id="chipTrump">—</span></div>
+      <div class="cg-stat"><span class="cg-stat-lbl">打</span><span class="cg-stat-val" id="chipLevel">2</span></div>
     </div>
+  </header>
+  <div class="cg-info" id="infoLine"></div>
+
+  <div class="cg-table">
+    <div id="log"></div>
+    <div class="cg-center" id="center-hint"></div>
+    <div class="seat" id="seat2"><span class="name">对家(队友)</span><div class="count"></div></div>
+    <div class="seat" id="seat1"><span class="name">左家</span><div class="count"></div></div>
+    <div class="seat" id="seat3"><span class="name">右家</span><div class="count"></div></div>
+    <div class="seat" id="seat0"></div>
+    <!-- 出牌区: 集中在牌桌中央 -->
+    <div class="played" id="play2"></div>
+    <div class="played" id="play1"></div>
+    <div class="played" id="play3"></div>
+    <div class="played" id="play0"></div>
   </div>
-  <div id="log"></div>
-  <div id="center-hint">升级 · 拖拉机</div>
-  <div class="seat" id="seat2"><span class="name">对家(队友)</span><div class="count"></div></div>
-  <div class="seat" id="seat1"><span class="name">左家</span><div class="count"></div></div>
-  <div class="seat" id="seat3"><span class="name">右家</span><div class="count"></div></div>
-  <div class="seat" id="seat0"></div>
-  <!-- 出牌区: 集中在牌桌中央 -->
-  <div class="played" id="play2"></div>
-  <div class="played" id="play1"></div>
-  <div class="played" id="play3"></div>
-  <div class="played" id="play0"></div>
 
   <div id="hand-area">
+    <div id="suitPalette" class="cg-palette"></div>
     <div id="hand"></div>
     <div id="controls"></div>
   </div>
 
-  <div id="overlay"><h2 id="ovTitle"></h2><div id="ovBody"></div>
-    <button id="ovBtn" style="margin-top:16px;">继续</button></div>
+  <div id="overlay"><div class="cg-modal">
+    <h2 id="ovTitle"></h2><div id="ovBody"></div>
+    <button id="ovBtn">继续</button>
+  </div></div>
 </div>
 
 <script src="voices.js"></script>
@@ -123,7 +94,7 @@ const Sound = {
   updateToggleButton() {
     const btn = document.getElementById('sound-toggle');
     if (btn) {
-      btn.textContent = this.muted ? '🔇 静音' : '🔊 声音';
+      btn.textContent = this.muted ? '🔇' : '🔊';
     }
   },
   dealSequence() {
@@ -503,26 +474,82 @@ function cardEl(c,cls){ const d=document.createElement('div');
   if(c.joker) d.innerHTML=`<div class="r">${c.joker==='B'?'大':'小'}</div><div class="s">王</div>`;
   else d.innerHTML=`<div class="r">${rankText(c)}</div><div class="s">${SUIT_SYM[c.suit]}</div>`;
   return d; }
-function renderSeat(i){ const seat=document.getElementById('seat'+i), p=players[i];
+function trickPointsSoFar(){ let s=0; trick.forEach(t=>t.cards.forEach(c=>s+=pts(c))); return s; }
+function renderSeat(i, leader){ const seat=document.getElementById('seat'+i), p=players[i];
   seat.classList.toggle('turn', phase==='play'&&trickOrder[turnPos]===i&&!gameOver);
-  const nm=seat.querySelector('.name'); if(nm) nm.classList.toggle('dealer', i===declarerSeat);
+  const nm=seat.querySelector('.name');
+  if(nm){
+    nm.classList.toggle('dealer', i===declarerSeat);
+    let db=seat.querySelector('.decl-badge');
+    if(declaration && declaration.seat===i){
+      if(!db){ db=document.createElement('div'); db.className='decl-badge'; seat.appendChild(db); }
+      const suitRed = declaration.suit!=='NT' && RED.has(declaration.suit);
+      db.classList.toggle('red', suitRed);
+      db.textContent = '主 ' + (declaration.suit==='NT'?'无主':SUIT_SYM[declaration.suit]);
+    } else if(db) db.remove();
+  }
   if(i!==0) seat.querySelector('.count').textContent='剩 '+p.hand.length+' 张';
-  const pl=document.getElementById('play'+i); pl.innerHTML=''; pl.classList.remove('win');
-  if(Array.isArray(p.lastShown)) p.lastShown.forEach(c=>pl.appendChild(cardEl(c,'mini'))); }
+  const pl=document.getElementById('play'+i); pl.innerHTML=''; pl.classList.remove('win','leading');
+  if(Array.isArray(p.lastShown)){
+    const row=document.createElement('div'); row.className='played-row';
+    p.lastShown.forEach(c=>row.appendChild(cardEl(c,'mini')));
+    pl.appendChild(row);
+    if(phase==='play' && leader===i){
+      const full = trick.length===4;
+      pl.classList.add(full?'win':'leading');
+      const b=document.createElement('div'); b.className='cg-badge '+(full?'win':'leading');
+      const s=trickPointsSoFar();
+      b.textContent = full ? ('赢墩'+(s?(' +'+s+'分'):'')) : '当前最大';
+      pl.appendChild(b);
+    }
+  } }
 function renderHand(){ const h=document.getElementById('hand'); h.innerHTML='';
   players[0].hand.forEach(c=>{ const el=cardEl(c); if(selected.has(c.id)) el.classList.add('sel');
     el.onclick=()=>toggleCard(c.id); h.appendChild(el); }); }
-function renderAll(){ [0,1,2,3].forEach(renderSeat); renderHand(); renderStatus(); }
+function renderAll(){
+  const leader = (phase==='play' && trick.length) ? trickWinner() : null;
+  [0,1,2,3].forEach(i=>renderSeat(i,leader));
+  renderHand(); renderStatus(); renderCenter(); renderSuitPalette(); }
 function renderStatus(){ const def=1-declarerTeam;
-  const tName = trumpSuit ? (trumpSuit==='NT'?'无主':SUIT_NAME[trumpSuit]) : (phase==='deal'?'发牌中…':'—');
-  document.getElementById('statusText').innerHTML=
-    `主牌：<b>${tName}</b>　级牌：<b>${rankText({rank:level})}</b><br>`+
-    `庄家：<b>${NAMES[declarerSeat]}</b>(${team(declarerSeat)===0?'你方':'对方'})<br>`+
-    `你方等级：<b>${rankText({rank:teamLevels[0]})}</b>　对方：<b>${rankText({rank:teamLevels[1]})}</b><br>`+
-    `闲家得分：<b>${teamPoints[def]}</b> / 80`; }
+  const tName = trumpSuit ? (trumpSuit==='NT'?'无主':SUIT_NAME[trumpSuit]) : '—';  // 发牌中的状态已在 infoLine 单独说明, 表头小格只需简洁占位
+  document.getElementById('chipTrump').textContent = tName;
+  document.getElementById('chipLevel').textContent = rankText({rank:level});
+  let info;
+  if(phase==='deal'){
+    if(dealIdx<100) info = `发牌中 ${dealIdx}/100 · ` + (declaration ? `${NAMES[declaration.seat]}亮${tName}，可反主` : '摸到级牌/王对即可亮主');
+    else info = `抢主收官 · ` + (declaration ? `当前 ${tName}（${NAMES[declaration.seat]}）` : '无人亮主');
+  } else if(phase==='bury'){
+    info = declarerSeat===0 ? '你是庄家，请埋 8 张底牌' : `${NAMES[declarerSeat]} 埋底中…`;
+  } else {
+    const act = phase==='play' && !gameOver ? NAMES[trickOrder[turnPos]] : '';
+    const turn = gameOver ? '' : (trickOrder[turnPos]===0 ? ' · 轮到你' : (act?' · 轮到'+act:''));
+    info = `庄家 ${NAMES[declarerSeat]} · 闲家 ${teamPoints[def]}/80` + turn;
+  }
+  document.getElementById('infoLine').textContent = info; }
+function renderCenter(){
+  const c=document.getElementById('center-hint');
+  if(phase==='deal'){
+    const dealing = dealIdx<100, pct = Math.round((dealIdx/100)*100);
+    const tName = declaration ? (declaration.suit==='NT'?'无主':SUIT_NAME[declaration.suit]) : (dealing?'发牌':'抢主');
+    c.className='cg-center';
+    c.innerHTML = `<div class="cg-center-ring${declaration?' declared':''}">${tName}</div>`+
+      `<div class="cg-center-lbl">${dealing?('发牌 '+dealIdx+'/100'):(declaration?(NAMES[declaration.seat]+' 亮主'):'无人亮主')}</div>`+
+      `<div class="cg-center-bar"><div style="width:${dealing?pct:100}%"></div></div>`;
+  } else if(phase==='play' && !gameOver){
+    const def=1-declarerTeam, v=teamPoints[def];
+    c.className='cg-center';
+    c.innerHTML = `<div class="cg-center-lbl">闲家得分</div>`+
+      `<div style="font-family:var(--font-rank);font-weight:700;font-size:22px;color:var(--accent);">${v}</div>`+
+      `<div class="cg-center-bar" style="width:78px;margin:4px auto 0;"><div style="width:${Math.min(100,v/80*100)}%"></div></div>`;
+  } else {
+    c.className='cg-center cg-center-watermark'; c.textContent='升级 · 拖拉机';
+  } }
+function updateBuryLabel(){ const b=document.getElementById('bBury');
+  if(b){ b.textContent=`埋底 ${selected.size}/8`; b.disabled = selected.size!==8; } }
 function toggleCard(id){ if(gameOver) return;
   if(!(phase==='bury' || (phase==='play'&&trickOrder[turnPos]===0))) return;
-  if(selected.has(id)) selected.delete(id); else selected.add(id); Sound.play('click'); renderHand(); }
+  if(selected.has(id)) selected.delete(id); else selected.add(id); Sound.play('click'); renderHand();
+  if(phase==='bury') updateBuryLabel(); }
 
 /* ===== 控制栏 ===== */
 function setControls(html){ document.getElementById('controls').innerHTML=html; }
@@ -617,25 +644,41 @@ function aiMaybeDeclare(){
   }
 }
 function renderDeal(){ renderAll(); updateDeclareControls(); }
+// 亮主/反主面板: 常驻在手牌上方的 5 格花色调色板(♠♥♣♦+无主), 摸到符合条件的牌就点亮, 随时可点
+function renderSuitPalette(){
+  const box=document.getElementById('suitPalette');
+  if(phase!=='deal'){ box.innerHTML=''; return; }
+  const myOpts=declareOptions(0).filter(o=>canDeclare(0,o.suit,o.strength));
+  const optBy={}; myOpts.forEach(o=>optBy[o.suit]=o);
+  const any=myOpts.length>0;
+  let tiles='';
+  for(const s of ['S','H','C','D','NT']){
+    const o=optBy[s], avail=!!o;
+    const active = !!(declaration && declaration.seat===0 && trumpSuit===s);
+    const red = s!=='NT' && RED.has(s);
+    const topLabel = s==='NT' ? '无主' : rankText({rank:level});
+    const sym = s==='NT' ? '王' : SUIT_SYM[s];
+    let subLabel='—';
+    if(avail){
+      if(active) subLabel='已亮';
+      else if(s==='NT') subLabel = o.strength>=4 ? '大王' : '小王';
+      else subLabel = declaration ? '反主' : (o.strength>=2 ? '对' : '亮');
+    }
+    tiles += `<button class="suitTile${avail?' avail':''}${avail&&red?' red':''}${active?' active':''}" `+
+      (avail?`data-s="${s}" data-st="${o.strength}"`:'disabled')+`>`+
+      `<div class="tt-r">${topLabel}</div><div class="tt-s">${sym}</div><div class="tt-l">${subLabel}</div></button>`;
+  }
+  box.innerHTML = `<div class="cg-palette-hint${any?' active':''}">${any?'点亮花色抢主 ▾':'摸到级牌 / 王对即可亮主'}</div>`+
+    `<div class="cg-palette-row">${tiles}</div>`;
+  box.querySelectorAll('.suitTile.avail').forEach(b=>b.onclick=()=>humanDeclare(b.dataset.s, +b.dataset.st));
+}
 function updateDeclareControls(){
   if(phase!=='deal') return;
-  const opts=declareOptions(0).filter(o=>canDeclare(0, o.suit, o.strength)).sort((a,b)=>b.strength-a.strength);
   const dealDone=dealIdx>=100;
-  const sig=(declaration?declaration.seat+declaration.suit+declaration.strength:'-')+'|'+opts.map(o=>o.suit+o.strength).join(',')+'|'+dealDone;
+  const sig=(declaration?declaration.seat+declaration.suit+declaration.strength:'-')+'|'+dealDone;
   if(sig===declareSig) return; declareSig=sig;
-  const cur = declaration
-    ? `当前主：<b>${declaration.suit==='NT'?'无主':SUIT_NAME[declaration.suit]}</b>（${NAMES[declaration.seat]}）`
-    : `摸到级牌可亮主`;
-  let html=`<span style="font-size:13px;margin-right:6px;">${cur}</span>`;
-  for(const o of opts){
-    const label = o.suit==='NT' ? (o.strength>=4?'大王对·无主':'小王对·无主')
-                                : (SUIT_SYM[o.suit] + (o.strength>=2?' 对(反主)':''));
-    html += `<button class="suit ${o.suit!=='NT'&&RED.has(o.suit)?'red':''}" data-s="${o.suit}" data-st="${o.strength}">亮 ${label}</button>`;
-  }
-  // 发完牌后给一个"我看完了, 不用等"的按钮, 想想清楚随时可以提前结束等待
-  if(dealDone) html += `<button id="bConfirmTrump" class="ghost">看好了，开始出牌</button>`;
-  setControls(html);
-  document.querySelectorAll('#controls button.suit').forEach(b=>b.onclick=()=>humanDeclare(b.dataset.s, +b.dataset.st));
+  // 发完牌后给一个"我看好了, 不用等"的按钮, 想清楚随时可以提前结束等待; 花色选择本身已改到常驻调色板
+  setControls(dealDone ? `<button id="bConfirmTrump" class="ghost">看好了，开始出牌</button>` : '');
   const cb=document.getElementById('bConfirmTrump'); if(cb) cb.onclick=confirmDeclareNow;
 }
 function confirmDeclareNow(){
@@ -662,11 +705,11 @@ function finishDeclare(){
 }
 function beginBury(){
   if(declarerSeat!==0){ aiBury(); return; }
-  setControls(`<button id="bBury">埋底(选8张)</button><button id="bSort" class="ghost">理牌</button>`+
+  setControls(`<button id="bBury">埋底 0/8</button><button id="bSort" class="ghost">理牌</button>`+
     `<button id="bHelp" class="ghost">规则</button>`);
   bBury.onclick=confirmBury; bSort.onclick=()=>{ sortHand(players[0].hand); renderHand(); };
   bHelp.onclick=()=>window.open('help.html#shengji','_blank');
-  renderAll(); log('你拿到底牌，请选 8 张埋入底牌（避免埋分牌/主牌）');
+  renderAll(); updateBuryLabel(); log('你拿到底牌，请选 8 张埋入底牌（避免埋分牌/主牌）');
 }
 function confirmBury(){
   if(selected.size!==8){ flash('请正好选择 8 张'); return; }
@@ -1165,6 +1208,9 @@ function showOverlay(title,body,cb,btn){ document.getElementById('ovTitle').text
 
 document.getElementById('sound-toggle').onclick=()=>Sound.toggleMute();
 Sound.updateToggleButton();
+function syncThemeIcon(){ document.getElementById('theme-toggle').textContent = Theme.get()==='A' ? '毡' : '墨'; }
+document.getElementById('theme-toggle').onclick=()=>{ Theme.toggle(); syncThemeIcon(); };
+syncThemeIcon();
 baseControls(); newGame();
 </script>
 </body>

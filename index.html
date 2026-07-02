@@ -1,47 +1,71 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-game="home">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>扑克牌桌 · 选择游戏</title>
-<style>
-  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-  body { margin:0; min-height:100vh; font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
-    background: radial-gradient(circle at 50% 30%, #1b4332 0%, #102a3c 70%, #0a1622 100%);
-    color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; }
-  h1 { font-size:30px; margin:0 0 4px; letter-spacing:2px; }
-  .sub { opacity:.75; margin-bottom:34px; font-size:14px; }
-  .cards { display:flex; gap:22px; flex-wrap:wrap; justify-content:center; }
-  .game { width:260px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.15);
-    border-radius:18px; padding:26px 22px; text-decoration:none; color:#fff; transition:transform .15s, box-shadow .15s, background .15s; }
-  .game:hover { transform:translateY(-6px); box-shadow:0 12px 30px rgba(0,0,0,.45); background:rgba(255,255,255,.12); }
-  .game .emoji { font-size:46px; }
-  .game h2 { margin:10px 0 4px; font-size:24px; }
-  .game .tag { font-size:13px; color:#ffd54a; margin-bottom:10px; }
-  .game p { font-size:13px; line-height:1.7; opacity:.85; margin:0; }
-  .gd { border-color:#2e8b57; } .gd:hover { background:rgba(46,139,87,.25); }
-  .sj { border-color:#4a90c2; } .sj:hover { background:rgba(74,144,194,.25); }
-  .foot { margin-top:34px; font-size:13px; }
-  .foot a { color:#9fd; }
-</style>
+<script src="theme.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=Noto+Serif+SC:wght@500;700;900&family=Sora:wght@500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css">
 </head>
 <body>
-  <h1>🃏 扑克牌桌</h1>
-  <div class="sub">两副牌 · 4 人对战 · 纯本地运行，无需联网</div>
+<div id="board">
+  <div class="cg-home-header">
+    <div class="cg-theme-switch" role="group" aria-label="视觉风格">
+      <button class="segBtn" data-dir="A">毡影</button>
+      <button class="segBtn" data-dir="B">墨玉</button>
+    </div>
+    <span class="cg-icon-btn" id="sound-toggle" role="button" aria-label="声音"></span>
+  </div>
+  <div class="cg-titleblock">
+    <div class="cg-kicker" id="kicker"></div>
+    <h1 class="cg-hometitle">扑克牌桌</h1>
+    <div class="cg-homesub" id="homesub"></div>
+  </div>
   <div class="cards">
     <a class="game gd" href="guandan.html">
-      <div class="emoji">🀄</div>
+      <span class="watermark">♠</span>
+      <span class="idx">01</span>
       <h2>掼蛋</h2>
-      <div class="tag">江淮流行 · 升级+跑得快</div>
-      <p>2 副牌，4 人 2 队，比谁先出完牌。含级牌、红桃百搭、炸弹、进贡还贡。先打过 A 获胜。</p>
+      <div class="tag">江淮流行 · 先出完牌</div>
+      <p>2 副牌，4 人 2 队，比谁先出完牌。含级牌、红桃百搭、炸弹、进贡还贡，先打过 A 获胜。</p>
+      <span class="cta">进入牌局 ›</span>
     </a>
     <a class="game sj" href="shengji.html">
-      <div class="emoji">🚜</div>
-      <h2>升级（拖拉机）</h2>
-      <div class="tag">经典80分 · 抓分上台</div>
-      <p>2 副牌，4 人 2 队，叫主、扣底、抓分。连对叫拖拉机，闲家抢够 80 分上台。先升过 A 获胜。</p>
+      <span class="watermark">♦</span>
+      <span class="idx">02</span>
+      <h2>升级 · 拖拉机</h2>
+      <div class="tag">经典 80 分 · 抓分上台</div>
+      <p>2 副牌，4 人 2 队，叫主埋底，连对拖拉机。闲家抢够 80 分上台，先升过 A 获胜。</p>
+      <span class="cta">开始 →</span>
     </a>
   </div>
-  <div class="foot">📖 不会玩？查看 <a href="help.html">规则与实例</a></div>
+  <div class="cg-foot">📖 不会玩？查看 <a href="help.html">规则与实例</a></div>
+</div>
+<script>
+  var MUTE_KEY = 'game_sound_muted';
+  function isMuted(){ return localStorage.getItem(MUTE_KEY) === 'true'; }
+  function syncMuteUI(){ document.getElementById('sound-toggle').textContent = isMuted() ? '🔇' : '🔊'; }
+  document.getElementById('sound-toggle').onclick = function(){
+    localStorage.setItem(MUTE_KEY, (!isMuted()));
+    syncMuteUI();
+  };
+  syncMuteUI();
+
+  function syncThemeUI(){
+    var dir = Theme.get();
+    document.querySelectorAll('.segBtn').forEach(function(b){ b.classList.toggle('active', b.dataset.dir === dir); });
+    var isA = dir === 'A';
+    document.getElementById('kicker').textContent = isA ? '两副牌 · 4 人对战' : 'CARD TABLE';
+    document.getElementById('homesub').textContent = isA ? '纯本地 · 无需联网 · 一人对三 AI' : '';
+    document.getElementById('homesub').style.display = isA ? 'block' : 'none';
+  }
+  document.querySelectorAll('.segBtn').forEach(function(b){
+    b.onclick = function(){ Theme.set(b.dataset.dir); syncThemeUI(); };
+  });
+  syncThemeUI();
+</script>
 </body>
 </html>
