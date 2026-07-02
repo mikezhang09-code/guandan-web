@@ -63,6 +63,17 @@ body {
   background: var(--felt);
 }
 #board { position: relative; width: 100%; min-height: 100%; display: flex; flex-direction: column; }
+/* 强制横/竖屏但设备实际朝向不一致时, 整体旋转 #board 把内容摆正撑满屏幕 (见 theme.js 里的 Orient 说明) --
+   容器旋转前的宽高对调用真实视口的高/宽(旋转后轴互换, 摆正后正好铺满整个屏幕), 用 100svh 而不是
+   100vh 是为了避开 iOS Safari 横屏工具栏侵占视口高度、量出来偏大的问题(呼应之前修的横屏按钮不可见)。 */
+[data-rotate-hack="cw"] #board {
+  position: fixed; top: 0; left: 100%; width: 100vh; width: 100svh; height: 100vw; min-height: 0;
+  transform-origin: left top; transform: rotate(90deg);
+}
+[data-rotate-hack="ccw"] #board {
+  position: fixed; top: 100%; left: 0; width: 100vh; width: 100svh; height: 100vw; min-height: 0;
+  transform-origin: left top; transform: rotate(-90deg);
+}
 
 /* ---------- header ---------- */
 .cg-header { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 10px 12px 4px; }

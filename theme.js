@@ -10,22 +10,31 @@
   root.Theme = { get: get, set: set, toggle: toggle };
 })(typeof window !== 'undefined' ? window : this);
 
-/* 横竖屏: 默认 auto(跟随实际设备/视口朝向, 手动转动手机即可切换); 表头 ⟳ 按钮可强制固定为
-   横屏或竖屏(桌面浏览器没有"转动"这回事, 需要一个入口才能预览/使用横屏布局), 再按一次回到 auto。 */
+/* 横竖屏: 默认 auto(跟随实际设备/视口朝向); 表头 ⟳ 按钮可强制固定为横屏或竖屏, 再按一次回到 auto。
+   如果强制的朝向和设备实际朝向不一致(比如手机本身没转/系统开了旋转锁定, 但想强制看横屏), 光换
+   CSS 尺寸没用——视口本身还是窄的。用整体 CSS 旋转把内容摆正撑满屏幕, 而不是干等设备物理转动:
+   iOS Safari 不支持 screen.orientation.lock（非全屏网页里根本用不了), 这是唯一能跨浏览器生效、
+   不需要全屏权限的办法。data-rotate-hack="cw"/"ccw"/"none" 由 theme.css 里对应的 #board 规则消费。 */
 (function (root) {
   var KEY = 'game_orient_pref';
   function pref() { var v = null; try { v = localStorage.getItem(KEY); } catch (e) {} return (v === 'portrait' || v === 'landscape') ? v : 'auto'; }
+  function physicalLandscape() { return !!(root.matchMedia && root.matchMedia('(orientation: landscape)').matches); }
   function resolved() {
     var p = pref(); if (p !== 'auto') return p;
-    return (root.matchMedia && root.matchMedia('(orientation: landscape)').matches) ? 'landscape' : 'portrait';
+    return physicalLandscape() ? 'landscape' : 'portrait';
   }
-  function apply() { document.documentElement.setAttribute('data-orient', resolved()); }
+  function apply() {
+    var want = resolved();
+    document.documentElement.setAttribute('data-orient', want);
+    var actual = physicalLandscape() ? 'landscape' : 'portrait';
+    document.documentElement.setAttribute('data-rotate-hack', want === actual ? 'none' : (want === 'landscape' ? 'cw' : 'ccw'));
+  }
   function cycle() {
     var p = pref(), next = p === 'auto' ? 'landscape' : (p === 'landscape' ? 'portrait' : 'auto');
     try { localStorage.setItem(KEY, next); } catch (e) {}
     apply(); return pref();
   }
   apply();
-  root.addEventListener('resize', function () { if (pref() === 'auto') apply(); });
+  root.addEventListener('resize', apply);
   root.Orient = { pref: pref, resolved: resolved, cycle: cycle };
 })(typeof window !== 'undefined' ? window : this);

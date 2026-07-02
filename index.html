@@ -17,6 +17,7 @@
       <button class="segBtn" data-dir="A">毡影</button>
       <button class="segBtn" data-dir="B">墨玉</button>
     </div>
+    <span class="cg-icon-btn" id="orient-toggle" role="button" aria-label="横竖屏">⟳</span>
     <span class="cg-icon-btn" id="sound-toggle" role="button" aria-label="声音"></span>
   </div>
   <div class="cg-titleblock">
@@ -66,6 +67,10 @@
     b.onclick = function(){ Theme.set(b.dataset.dir); syncThemeUI(); };
   });
   syncThemeUI();
+
+  function syncOrientIcon(){ document.getElementById('orient-toggle').classList.toggle('active', Orient.pref()!=='auto'); }
+  document.getElementById('orient-toggle').onclick = function(){ Orient.cycle(); syncOrientIcon(); };
+  syncOrientIcon();
 </script>
 </body>
 </html>
