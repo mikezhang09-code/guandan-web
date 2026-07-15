@@ -934,7 +934,11 @@ function aiFollow(seat){
   const beats=cards=>{ const c=detectCombo(cards); if(!c||c.type!==lead.type||c.size!==lead.size) return false;
     if(c.group==='T'&&best.combo.group!=='T') return true;
     return c.group===best.combo.group && c.topVal>best.combo.topVal; };
-  
+  // 对手正赢牌时，从"能压过当前最大牌"的候选里挑真正稳的一手：打出后，后面还没出牌的对手也大不过(全信息)。
+  // 优先挑刚好够用的最小一手；如果每一手都稳不住(后面对手能反超)，返回 null——不该为了赢不了的墩硬搭一张
+  // 更值钱的牌，那样墩和牌一起丢，不如留着，交给下面的兜底逻辑去垫最小/最不值钱的。
+  const safestBeat=cands=>{ for(const cand of cands){ if(!remainingOppCanBeat(detectCombo(cand),seat)) return cand; } return null; };
+
   // 队友赢牌时，是否需要垫分？直接读还没出牌的对手手里到底有没有能大过队友的牌(全信息, 不是猜)，
   // 而不是只用"是不是最后一家"/"是不是王牌"这种粗糙代理去判断 —— 那样会漏掉很多其实已经稳了的情况，
   // 比如对方主牌已经出光了，却因为还没轮到最后一家就白白不敢垫分。
@@ -945,14 +949,14 @@ function aiFollow(seat){
   let chosen=null;
   if(G.length>=lead.size){
     if(lead.type==='single'){
-      if(oppWin){ const c=G.filter(x=>beats([x]))[0]; if(c) chosen=[c]; }
+      if(oppWin){ const c=safestBeat(G.filter(x=>beats([x])).map(x=>[x])); if(c) chosen=c; }
       if(!chosen){
         const pool = mateWin && G.some(c=>notOvertake(tval(c))) ? G.filter(c=>notOvertake(tval(c))) : G;
         const s=pool.slice().sort((a,b)=> partnerWinsDefinitively? (pts(b)-pts(a)||tval(a)-tval(b)) : (pts(a)-pts(b)||tval(a)-tval(b))); chosen=[s[0]];
       }
     } else if(lead.type==='pair'){
       const prs=groupPairs(G);
-      if(oppWin){ const c=prs.find(p=>beats(p)); if(c) chosen=c; }
+      if(oppWin){ const c=safestBeat(prs.filter(p=>beats(p))); if(c) chosen=c; }
       if(!chosen){ if(prs.length){
           if(mateWin){
             const pool = prs.some(p=>notOvertake(tval(p[0]))) ? prs.filter(p=>notOvertake(tval(p[0]))) : prs;
@@ -961,7 +965,7 @@ function aiFollow(seat){
         }
         else { const s=G.slice().sort((a,b)=> partnerWinsDefinitively?(pts(b)-pts(a)):(pts(a)-pts(b))||tval(a)-tval(b)); chosen=[s[0],s[1]]; } }
     } else { const trs=tractorsOf(G,lead.size);
-      if(oppWin){ const c=trs.find(t=>beats(t)); if(c) chosen=c; }
+      if(oppWin){ const c=safestBeat(trs.filter(t=>beats(t))); if(c) chosen=c; }
       if(!chosen) chosen= trs[0] || G.slice(0,lead.size); }
   } else if(G.length===0){
     // 空对空的将吃逻辑
@@ -969,9 +973,9 @@ function aiFollow(seat){
     const worthRuffing=trickPts>0 || hand.length===lead.size || (isLastPlayer && teamPoints[1-declarerTeam] >= 75); // 临界分
     if(oppWin && worthRuffing){            // 用主牌将吃(含反扣)
       const T=hand.filter(c=>isTrump(c)).sort((a,b)=>tval(a)-tval(b));
-      if(lead.type==='single' && T.length) { const c=T.find(x=>beats([x])); if(c) chosen=[c]; }
-      else if(lead.type==='pair'){ const tp=groupPairs(T).find(p=>beats(p)); if(tp) chosen=tp; }
-      else { const tt=tractorsOf(T,lead.size).find(t=>beats(t)); if(tt) chosen=tt; }
+      if(lead.type==='single' && T.length) { const c=safestBeat(T.filter(x=>beats([x])).map(x=>[x])); if(c) chosen=c; }
+      else if(lead.type==='pair'){ const tp=safestBeat(groupPairs(T).filter(p=>beats(p))); if(tp) chosen=tp; }
+      else { const tt=safestBeat(tractorsOf(T,lead.size).filter(t=>beats(t))); if(tt) chosen=tt; }
     }
     if(!chosen){ const pool=hand.slice().sort((a,b)=> partnerWinsDefinitively?(pts(b)-pts(a)):(pts(a)-pts(b))||tval(a)-tval(b)); chosen=pool.slice(0,lead.size); }
   } else {
