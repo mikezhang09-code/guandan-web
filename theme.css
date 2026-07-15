@@ -166,16 +166,19 @@ body {
 .mini.card.wild::after { font-size: 6px; padding: 0 2px; bottom: 2px; }  /* 小堆牌里缩小徽标, 而不是隐藏(与满尺寸手牌保持一致) */
 
 /* ---------- hand ----------
-   Portrait (both directions): wrap into a full grid so the whole hand is visible at a glance --
-   a scrolling single row hides most of a 25+ card hand, which defeats being able to plan a play.
-   Landscape: revert to one fanned, overlapping, horizontally-scrolling row (there's enough width
-   there for that to actually work, and it reads better than a short wrapped grid at that aspect). */
+   Portrait (both directions): same fanned/overlapping cards as landscape, just wrapped across
+   as many rows as needed instead of one scrolling row -- a flat non-overlapping grid ate nearly
+   half the screen with a 25+ card hand. margin-left on every card overlaps it over the previous
+   one; :first-child (the overall first card) resets to 0 so the fan doesn't start off-center.
+   Landscape: one fanned, overlapping, horizontally-scrolling row (there's enough width there for
+   that to actually work, and it reads better than a wrapped grid at that aspect). */
 #hand-area { flex: 0 0 auto; background: linear-gradient(to top, rgba(0,0,0,.4), transparent); padding-bottom: 4px; }
 #hand {
   display: flex; flex-wrap: wrap; overflow: visible; align-items: flex-start;
-  justify-content: center; padding: 14px 10px 4px; gap: 5px 4px;
+  justify-content: center; padding: 14px 14px 4px; gap: 10px 0;
 }
-#hand .card { width: 50px; height: 73px; font-size: 15px; padding: 6px 0 0 7px; transition: transform .12s, box-shadow .12s; cursor: pointer; }
+#hand .card { width: 50px; height: 73px; font-size: 15px; padding: 6px 0 0 7px; margin-left: -24px; transition: transform .12s, box-shadow .12s; cursor: pointer; }
+#hand .card:first-child { margin-left: 0; }
 #hand .card .r { font-size: 17px; } #hand .card .s { font-size: 15px; }
 #hand .card.sel { transform: translateY(var(--card-lift)); box-shadow: 0 12px 22px -8px var(--accent), 0 0 0 2px var(--accent); }
 [data-orient="landscape"] #hand {
