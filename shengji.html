@@ -980,10 +980,15 @@ function aiLead(seat){
   const pool=(nonTr.length?nonTr:hand).slice().sort((a,b)=>pts(a)-pts(b)||tval(a)-tval(b));
   return [pool[0]];
 }
-function shouldRuff(seat,leadSize,trickPoints,isLastPlayer){
-  if(players[seat].hand.length<=leadSize+2) return true;
-  if(trickPoints>0) return true;
-  return isLastPlayer && teamPoints[1-declarerTeam]>=75;
+// 本墩里排在 seat 之后、还没出牌的对手座位(全按公开信息: 出牌顺序)
+function trailingOpponents(seat){
+  const res=[]; for(let i=turnPos+1;i<trickOrder.length;i++){ const s=trickOrder[i];
+    if(team(s)!==team(seat)) res.push(s); } return res;
+}
+// 后手对手里, 是否有人对该门已确定缺门。缺门的后手对手既会往里贴分(垫任意分牌送给正赢牌的队友),
+// 也可能靠缺门"反毙"盖过我方同花色的跟牌。只看公开信息(voidGroups), 不偷看手牌。
+function trailingOppVoid(seat,group){
+  return group!=='T' && trailingOpponents(seat).some(s=>voidGroups[s].has(group));
 }
 function aiFollow(seat){
   const hand=players[seat].hand, lead=trick[0].combo;
@@ -1018,7 +1023,11 @@ function aiFollow(seat){
     if(!forceBeat) return null;
     return legal.slice().sort((a,b)=>Math.max(...a.map(tval))-Math.max(...b.map(tval)))[0];
   };
-  const partnerWinsDefinitively = mateWin && !remainingOppCanBeat(best.combo, seat);
+  // 队友赢牌是否"稳到可以放心贴分": 除了未见牌压不过, 还要求——若队友是用副牌(非主)赢的,
+  // 后手对手里没人已确定缺这门(否则会被反毙, 贴上去的分白送给对方)。
+  const mateWonWithTrump = mateWin && best.combo.group==='T';
+  const partnerWinsDefinitively = mateWin && !remainingOppCanBeat(best.combo, seat)
+    && (mateWonWithTrump || !trailingOppVoid(seat, lead.group));
   
   const notOvertake=v=>v<best.combo.topVal;
   let chosen=null;
@@ -1043,19 +1052,17 @@ function aiFollow(seat){
       if(oppWin){ const c=chooseBeat(trs); if(c) chosen=c; }
       if(!chosen) chosen= trs[0] || G.slice(0,lead.size); }
   } else if(G.length===0){
-    // 空对空的将吃逻辑
-    const worthRuffing=shouldRuff(seat,lead.size,trickPts,isLastPlayer);
-    if(oppWin && worthRuffing){            // 用主牌将吃(含反扣)
+    // 空对空的将吃逻辑: "0分不杀, 有分必杀"——本墩已有分且对手正赢牌时, 只要有合规的主牌就毙下来抢分(含反扣);
+    // 一分没有就绝不浪费主牌去吃空墩, 直接往下垫。
+    if(oppWin && trickPts>0){            // 有分必杀
       const T=hand.filter(c=>isTrump(c)).sort((a,b)=>tval(a)-tval(b));
       const chooseRuff=cands=>{
         const legal=cands.filter(beats);
         if(!legal.length) return null;
         const safe=safestBeat(legal);
-        if(safe) return safe;
-        // 有分时不能因为无法证明绝对安全就完全放弃将吃，改用最小可赢主牌。
-        if(trickPts>0) return legal.slice().sort((a,b)=>
-          Math.max(...a.map(tval))-Math.max(...b.map(tval)))[0];
-        return null;
+        if(safe) return safe;                 // 能证明绝对守得住(后手反毙不了)就用最小的安全主
+        // 否则用最小可赢的主牌: 分要先抢下, 哪怕理论上可能被后手缺门的对手反毙。
+        return legal.slice().sort((a,b)=>Math.max(...a.map(tval))-Math.max(...b.map(tval)))[0];
       };
       if(lead.type==='single' && T.length) chosen=chooseRuff(T.map(x=>[x]));
       else if(lead.type==='pair') chosen=chooseRuff(groupPairs(T));
