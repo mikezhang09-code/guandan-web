@@ -872,15 +872,19 @@ function leadCandidateScore(seat,cards,kind){
   const points=cards.reduce((sum,c)=>sum+pts(c),0);
   const isT=cards.every(isTrump), group=isT?'T':cards[0].suit;
   const keyOf=c=>c.joker ? c.joker : c.suit+'_'+c.rank;
+  const declarerSide=team(seat)===declarerTeam;
+  const safeLead=kind==='throw' || !anyOpponentBeats(cards,seat);
   let score=kind==='throw'?55:0;
-  if(points===0) score+=28; else score-=points*3;
+  if(points===0) score+=declarerSide?28:20;
+  else if(safeLead) score+=declarerSide?-points*2:points*4;
+  else score-=points*(declarerSide?3:4);
   if(combo.type==='tractor') score+=70;
   else if(combo.type==='pair') score+=40;
   else if(combo.type==='throw') score+=20;
   if(cards.length>1) score+=(cards.length-1)*12;
   if(isT){
     const trumpCount=hand.filter(isTrump).length;
-    score+=team(seat)===declarerTeam ? (trumpCount>=7?32:-12) : -18;
+    score+=declarerSide ? (trumpCount>=7?32:-12) : -18;
     score+=Math.min(24,Math.max(...cards.map(tval))/40);
   } else if(cards.length===1){
     const suitCount=hand.filter(c=>!isTrump(c)&&c.suit===group).length;
@@ -891,7 +895,7 @@ function leadCandidateScore(seat,cards,kind){
     if(sameCount>=2) score-=45;
   }
   if(!isT && anotherPlayerKnownVoid(seat,group)) score-=kind==='throw'?70:24;
-  if(!anyOpponentBeats(cards,seat)) score+=35;
+  if(safeLead) score+=declarerSide?35:30;
   if(hand.length<=cards.length+4) score+=25;
   return score;
 }
@@ -1034,9 +1038,19 @@ function aiFollow(seat){
     const worthRuffing=shouldRuff(seat,lead.size,trickPts,isLastPlayer);
     if(oppWin && worthRuffing){            // 用主牌将吃(含反扣)
       const T=hand.filter(c=>isTrump(c)).sort((a,b)=>tval(a)-tval(b));
-      if(lead.type==='single' && T.length) { const c=safestBeat(T.filter(x=>beats([x])).map(x=>[x])); if(c) chosen=c; }
-      else if(lead.type==='pair'){ const tp=safestBeat(groupPairs(T).filter(p=>beats(p))); if(tp) chosen=tp; }
-      else { const tt=safestBeat(tractorsOf(T,lead.size).filter(t=>beats(t))); if(tt) chosen=tt; }
+      const chooseRuff=cands=>{
+        const legal=cands.filter(beats);
+        if(!legal.length) return null;
+        const safe=safestBeat(legal);
+        if(safe) return safe;
+        // 有分时不能因为无法证明绝对安全就完全放弃将吃，改用最小可赢主牌。
+        if(trickPts>0) return legal.slice().sort((a,b)=>
+          Math.max(...a.map(tval))-Math.max(...b.map(tval)))[0];
+        return null;
+      };
+      if(lead.type==='single' && T.length) chosen=chooseRuff(T.map(x=>[x]));
+      else if(lead.type==='pair') chosen=chooseRuff(groupPairs(T));
+      else chosen=chooseRuff(tractorsOf(T,lead.size));
     }
     if(!chosen){ const pool=hand.slice().sort((a,b)=> partnerWinsDefinitively?(pts(b)-pts(a)):(pts(a)-pts(b))||tval(a)-tval(b)); chosen=pool.slice(0,lead.size); }
   } else {
