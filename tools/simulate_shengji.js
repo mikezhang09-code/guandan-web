@@ -123,30 +123,44 @@ function runOne(ref, seed) {
       teamPoints=[0,0]; playedCards=[];
       voidGroups=[0,1,2,3].map(()=>new Set());
       phase='play'; trick=[]; lastTrickInfo=null;
+      const buryInput=players[declarerSeat].hand.slice();
       aiBury();
-      let lead=declarerSeat, tricks=0, errors=0, errorInfo='', missedRuffs=0, pointsWon=[0,0];
+      const buryKeys={}; buryInput.forEach(card=>{ const key=card.joker?card.joker:card.suit+'_'+card.rank; buryKeys[key]=(buryKeys[key]||0)+1; });
+      const keptKeys={}; players[declarerSeat].hand.forEach(card=>{ const key=card.joker?card.joker:card.suit+'_'+card.rank; keptKeys[key]=(keptKeys[key]||0)+1; });
+      const buryBrokenPairs=Object.keys(buryKeys).filter(key=>buryKeys[key]>=2&&(keptKeys[key]||0)<2).length;
+      const buryPoints=kitty.reduce((sum,card)=>sum+pts(card),0);
+      const buryTrumps=kitty.filter(isTrump).length;
+      let lead=declarerSeat, tricks=0, errors=0, errorInfo='', missedRuffs=0, missedBeats=0, pointsWon=[0,0];
       while(tricks<120 && players.some(p=>p.hand.length)){
         trick=[]; trickOrder=[lead,(lead+1)%4,(lead+2)%4,(lead+3)%4]; turnPos=0;
         for(let position=0;position<4;position++){
           turnPos=position;
           const seat=trickOrder[turnPos];
           let ruffOpportunity=false;
+          let beatOpportunity=false;
+          let canBeatCurrent=()=>false;
           if(turnPos>0 && trick[0].combo && trick[0].combo.group!=='T'){
             const leadGroup=trick[0].combo.group;
             const hasLead=players[seat].hand.some(card=>inGroup(card,leadGroup));
             const currentWinner=trickWinner();
             const currentCombo=trick.find(item=>item.seat===currentWinner)?.combo;
             const currentPoints=trick.reduce((sum,item)=>sum+item.cards.reduce((subtotal,card)=>subtotal+pts(card),0),0);
-            const canBeatCurrent=cards=>{
+            canBeatCurrent=cards=>{
               const combo=detectCombo(cards); if(!combo||!currentCombo||combo.size!==currentCombo.size) return false;
               if(combo.group==='T'&&currentCombo.group!=='T') return true;
               return combo.group===currentCombo.group&&combo.topVal>currentCombo.topVal;
             };
-            const trump=players[seat].hand.filter(isTrump);
-            const candidates=trick[0].combo.type==='single' ? trump.map(card=>[card])
-              : trick[0].combo.type==='pair' ? groupPairs(trump)
-              : tractorsOf(trump,trick[0].cards.length);
-            ruffOpportunity=!hasLead && team(currentWinner)!==team(seat) && currentPoints>0 && candidates.some(canBeatCurrent);
+            const groupCards=players[seat].hand.filter(card=>inGroup(card,leadGroup));
+            const candidates=hasLead
+              ? trick[0].combo.type==='single' ? groupCards.map(card=>[card])
+                : trick[0].combo.type==='pair' ? groupPairs(groupCards)
+                : tractorsOf(groupCards,trick[0].cards.length)
+              : trick[0].combo.type==='single' ? players[seat].hand.filter(isTrump).map(card=>[card])
+                : trick[0].combo.type==='pair' ? groupPairs(players[seat].hand.filter(isTrump))
+                : tractorsOf(players[seat].hand.filter(isTrump),trick[0].cards.length);
+            const canBeat=team(currentWinner)!==team(seat) && currentPoints>0 && candidates.some(canBeatCurrent);
+            beatOpportunity=canBeat;
+            ruffOpportunity=!hasLead && canBeat;
           }
           const cards=turnPos===0 ? aiLead(seat) : aiFollow(seat);
           if(!cards || !cards.length) { errors++; errorInfo='empty cards at seat '+seat+' hand '+players[seat].hand.length; continue; }
@@ -158,6 +172,7 @@ function runOne(ref, seed) {
             errors++; errorInfo=errorInfo||'illegal follow at seat '+seat+' lead size '+trick[0].cards.length+' cards '+cards.length;
           }
           if(ruffOpportunity && !cards.every(isTrump)) missedRuffs++;
+          if(beatOpportunity && !canBeatCurrent(cards)) missedBeats++;
           commit(seat,cards);
         }
         turnPos=4;
@@ -168,7 +183,7 @@ function runOne(ref, seed) {
         lead=winner; tricks++;
       }
       const defenderTeam=1-declarerTeam;
-      return {completed:players.every(p=>p.hand.length===0),errors,errorInfo,tricks,missedRuffs,points:pointsWon,remaining:players.reduce((n,p)=>n+p.hand.length,0),hands:players.map(p=>p.hand.length),declarerTeam,defenderPoints:pointsWon[defenderTeam],declarerPoints:pointsWon[declarerTeam]};
+      return {completed:players.every(p=>p.hand.length===0),errors,errorInfo,tricks,missedRuffs,missedBeats,buryPoints,buryTrumps,buryBrokenPairs,points:pointsWon,remaining:players.reduce((n,p)=>n+p.hand.length,0),hands:players.map(p=>p.hand.length),declarerTeam,defenderPoints:pointsWon[defenderTeam],declarerPoints:pointsWon[declarerTeam]};
     }
     this.__simulationResult=simulateOne();
   `;
@@ -187,8 +202,12 @@ function summarize(ref) {
   const defenderPoints=results.reduce((sum,result)=>sum+result.defenderPoints,0);
   const declarerPoints=results.reduce((sum,result)=>sum+result.declarerPoints,0);
   const missedRuffs=results.reduce((sum,result)=>sum+result.missedRuffs,0);
+  const missedBeats=results.reduce((sum,result)=>sum+result.missedBeats,0);
+  const buryPoints=results.reduce((sum,result)=>sum+result.buryPoints,0);
+  const buryTrumps=results.reduce((sum,result)=>sum+result.buryTrumps,0);
+  const buryBrokenPairs=results.reduce((sum,result)=>sum+result.buryBrokenPairs,0);
   const defenderBelow80=results.filter(result=>result.defenderPoints<80).length;
-  return {ref,games,completed,completionRate:completed/games,errors,missedRuffs,missedRuffsAverage:missedRuffs/games,firstError:results.find(result=>result.errorInfo)?.errorInfo||'',firstHands:results.find(result=>result.errorInfo)?.hands||[],tricksAverage:tricks/games,remainingAverage:remaining/games,pointsAverage:points.map(value=>value/games),declarerPointsAverage:declarerPoints/games,defenderPointsAverage:defenderPoints/games,defenderBelow80Rate:defenderBelow80/games};
+  return {ref,games,completed,completionRate:completed/games,errors,missedRuffs,missedRuffsAverage:missedRuffs/games,missedBeats,missedBeatsAverage:missedBeats/games,buryPointsAverage:buryPoints/games,buryTrumpsAverage:buryTrumps/games,buryBrokenPairsAverage:buryBrokenPairs/games,firstError:results.find(result=>result.errorInfo)?.errorInfo||'',firstHands:results.find(result=>result.errorInfo)?.hands||[],tricksAverage:tricks/games,remainingAverage:remaining/games,pointsAverage:points.map(value=>value/games),declarerPointsAverage:declarerPoints/games,defenderPointsAverage:defenderPoints/games,defenderBelow80Rate:defenderBelow80/games};
 }
 
 console.log(JSON.stringify({baseline:summarize('HEAD'),current:summarize('WORKTREE')}, null, 2));
