@@ -332,6 +332,8 @@ let teamLevels=[2,2], declarerTeam=0, declarerSeat=0;
 let level=2, trumpSuit='NT', SEQ=[], SEQIDX={};
 let players=[], kitty=[], gameOver=false;
 let phase='', trick=[], trickOrder=[], turnPos=0, leadSeat=0, lastTrickInfo=null;
+let playedCards=[];
+let voidGroups=[];
 let teamPoints=[0,0];           // 各队本局收到的分(只闲家分用于结算)
 let selected=new Set();
 
@@ -572,7 +574,8 @@ function startDeal(){
   trumpSuit=null; declaration=null; declareSig='';
   dealPile=shuffle(makeDeck());
   players=[0,1,2,3].map(i=>({idx:i,hand:[],lastShown:null}));
-  kitty=[]; teamPoints=[0,0]; selected.clear(); trick=[]; lastTrickInfo=null;
+  kitty=[]; teamPoints=[0,0]; selected.clear(); trick=[]; lastTrickInfo=null; playedCards=[];
+  voidGroups=[0,1,2,3].map(()=>new Set());
   dealIdx=0; phase='deal';
   log(`新一局：打 ${rankText({rank:level})}　发牌中…摸到级牌(${rankText({rank:level})})可亮主`);
   renderAll();
@@ -630,17 +633,31 @@ function humanDeclare(suit, strength){
   setDeclaration(0, suit, strength);
   renderDeal();
 }
+function declarationScore(hand,opt){
+  const suit=opt.suit;
+  if(suit==='NT') return 500 + opt.strength*100;
+  const natural=hand.filter(c=>!c.joker && c.suit===suit);
+  const controls=natural.filter(c=>c.rank>=12).length;
+  const levelCards=hand.filter(c=>!c.joker && c.rank===level).length;
+  const points=natural.reduce((sum,c)=>sum+pts(c),0);
+  return opt.strength*120 + natural.length*18 + controls*24 + levelCards*10 + points*0.5;
+}
+function shouldAiDeclare(hand,opt){
+  if(opt.strength>=3) return true;
+  if(hand.length<12) return false;
+  const natural=hand.filter(c=>!c.joker && c.suit===opt.suit);
+  const controls=natural.filter(c=>c.rank>=12).length;
+  if(opt.strength===2) return natural.length>=7 || (natural.length>=6 && controls>=2);
+  return natural.length>=7 && controls>=2;
+}
 function aiMaybeDeclare(){
   for(let seat=1; seat<4; seat++){
-    const opts=declareOptions(seat).filter(o=>canDeclare(seat, o.suit, o.strength)).sort((a,b)=>b.strength-a.strength);
+    const h=players[seat].hand;
+    const opts=declareOptions(seat).filter(o=>canDeclare(seat, o.suit, o.strength));
     if(!opts.length) continue;
-    const best=opts[0], h=players[seat].hand;
-    let want=false;
-    if(best.strength>=3) want = Math.random()<0.7;            // 王对·无主
-    else if(best.strength===2) want = Math.random()<0.55;     // 级牌对子(含反主)
-    else { const cnt=h.filter(c=>!c.joker && c.suit===best.suit).length;
-           want = !declaration && cnt>=6 && Math.random()<0.45; }   // 单张需该花色够多
-    if(want){ setDeclaration(seat, best.suit, best.strength); }
+    opts.sort((a,b)=>declarationScore(h,b)-declarationScore(h,a));
+    const best=opts[0];
+    if(shouldAiDeclare(h,best)) setDeclaration(seat, best.suit, best.strength);
   }
 }
 function renderDeal(){ renderAll(); updateDeclareControls(); }
@@ -720,70 +737,46 @@ function confirmBury(){
 }
 function aiBury(){
   const d=players[declarerSeat];
-  const hand=d.hand;
-  
-  // Count cards per suit to check suit length
-  const suitCounts={};
-  hand.forEach(c=>{
-    const s = isTrump(c) ? 'T' : c.suit;
-    suitCounts[s] = (suitCounts[s] || 0) + 1;
-  });
-  
-  // Identify cards that belong to pairs
-  const pairKeys = new Set();
-  const m = {};
-  hand.forEach(c => {
-    const k = c.joker ? c.joker : (c.suit + '_' + c.rank);
-    m[k] = (m[k] || 0) + 1;
-    if (m[k] === 2) pairKeys.add(k);
-  });
-  
-  const getBuryScore = c => {
-    let score = 0;
-    const isT = isTrump(c);
-    
-    // Trump penalty
-    if (isT) {
-      score += 1000;
-    } else {
-      // Suit length bonus/penalty
-      const len = suitCounts[c.suit] || 0;
-      if (len <= 2) {
-        score -= 150; // Voiding suit bonus
-      } else if (len >= 6) {
-        score += 50;
-      }
+  let remaining=d.hand.slice(), buried=[];
+  const keyOf=c=>c.joker ? c.joker : (c.suit+'_'+c.rank);
+  const tractorIds=new Set();
+  for(const group of ['T',...SUITS]){
+    const segment=remaining.filter(c=>inGroup(c,group));
+    const tractor=longestTractor(segment);
+    if(tractor) tractor.forEach(c=>tractorIds.add(c.id));
+  }
+  const buryScore=(c,cards)=>{
+    const isT=isTrump(c), group=isT?'T':c.suit;
+    const suitCount=cards.filter(x=>inGroup(x,group)).length;
+    const sameCount=cards.filter(x=>keyOf(x)===keyOf(c)).length;
+    let score=isT ? 1500 : 0;
+    if(!isT){
+      if(suitCount===1) score-=360;
+      else if(suitCount===2) score-=190;
+      else if(suitCount===3) score-=80;
+      else if(suitCount>=7) score+=65;
     }
-    
-    // Points penalty
-    const p = pts(c);
-    if (p === 5) score += 100;
-    else if (p === 10) score += 200;
-    
-    // Pair penalty
-    const k = c.joker ? c.joker : (c.suit + '_' + c.rank);
-    if (pairKeys.has(k)) {
-      score += 300;
-    }
-    
-    // Card strength penalty
-    if (!isT) {
-      if (c.rank === 14) score += 300;      // Ace
-      else if (c.rank === 13) score += 150; // King
-      else if (c.rank === 12) score += 80;  // Queen
-      else if (c.rank === 11) score += 40;  // Jack
-      else score += c.rank;                 // Low card
-    } else {
-      score += tval(c); // Trump strength
-    }
-    
+    if(pts(c)===10) score+=260;
+    else if(pts(c)===5) score+=150;
+    if(c.rank===14) score+=280;
+    else if(c.rank===13) score+=150;
+    else if(c.rank===12) score+=80;
+    else if(c.rank===11) score+=35;
+    else if(!isT) score+=c.rank;
+    else score+=tval(c);
+    if(sameCount===2) score+=520;
+    else if(sameCount>=3) score+=120;
+    if(tractorIds.has(c.id)) score+=380;
     return score;
   };
-  
-  const cand = hand.slice().sort((a,b) => getBuryScore(a) - getBuryScore(b));
-  kitty = cand.slice(0, 8);
+  while(buried.length<8){
+    const choice=remaining.slice().sort((a,b)=>buryScore(a,remaining)-buryScore(b,remaining))[0];
+    buried.push(choice);
+    remaining=remaining.filter(c=>c.id!==choice.id);
+  }
+  kitty=buried;
   const ids = new Set(kitty.map(c=>c.id));
-  d.hand = hand.filter(c=>!ids.has(c.id));
+  d.hand = d.hand.filter(c=>!ids.has(c.id));
   sortHand(d.hand);
   
   Sound.speak("埋底", declarerSeat);
@@ -809,6 +802,10 @@ function updateControls(){ const my=phase==='play'&&trickOrder[turnPos]===0&&!ga
   if(bp) bp.disabled=!my; if(bh) bh.disabled=!my; }
 function commit(seat,cards){
   const p=players[seat]; const ids=new Set(cards.map(c=>c.id));
+  if(turnPos>0 && trick[0] && trick[0].combo && trick[0].combo.group!=='T'){
+    const leadGroup=trick[0].combo.group;
+    if(!p.hand.some(c=>inGroup(c,leadGroup))) voidGroups[seat].add(leadGroup);
+  }
   p.hand=p.hand.filter(c=>!ids.has(c.id)); p.lastShown=cards.slice();
   let combo;
   if(turnPos===0){
@@ -817,6 +814,7 @@ function commit(seat,cards){
   } else combo=detectCombo(cards);
 
   trick.push({seat,cards:cards.slice(),combo});
+  playedCards.push(...cards);
   log(`${NAMES[seat]} 出 ${cards.map(rankText).join('')}`);
   Sound.play('play');
   turnPos++; takeTurn();
@@ -863,8 +861,66 @@ function longestTractor(G){ // G 内最长的一段连对(拖拉机), 没有则 
     if(run.length>=2 && run.length>best.length) best=run.slice();
   }
   return best.length? best.flat() : null; }
+function anotherPlayerKnownVoid(seat,group){
+  return voidGroups.some((groups,idx)=>idx!==seat && groups.has(group));
+}
+function leadCandidateScore(seat,cards,kind){
+  const hand=players[seat].hand;
+  const combo=detectCombo(cards) || (kind==='throw' && validateThrow(cards).ok
+    ? makeThrowCombo(cards, isTrump(cards[0])?'T':cards[0].suit) : null);
+  if(!combo) return -Infinity;
+  const points=cards.reduce((sum,c)=>sum+pts(c),0);
+  const isT=cards.every(isTrump), group=isT?'T':cards[0].suit;
+  const keyOf=c=>c.joker ? c.joker : c.suit+'_'+c.rank;
+  let score=kind==='throw'?55:0;
+  if(points===0) score+=28; else score-=points*3;
+  if(combo.type==='tractor') score+=70;
+  else if(combo.type==='pair') score+=40;
+  else if(combo.type==='throw') score+=20;
+  if(cards.length>1) score+=(cards.length-1)*12;
+  if(isT){
+    const trumpCount=hand.filter(isTrump).length;
+    score+=team(seat)===declarerTeam ? (trumpCount>=7?32:-12) : -18;
+    score+=Math.min(24,Math.max(...cards.map(tval))/40);
+  } else if(cards.length===1){
+    const suitCount=hand.filter(c=>!isTrump(c)&&c.suit===group).length;
+    const sameCount=hand.filter(c=>keyOf(c)===keyOf(cards[0])).length;
+    if(suitCount<=2) score+=30;
+    else if(suitCount>=7) score-=10;
+    if(cards[0].rank<=10 && !points) score+=12;
+    if(sameCount>=2) score-=45;
+  }
+  if(!isT && anotherPlayerKnownVoid(seat,group)) score-=kind==='throw'?70:24;
+  if(!anyOpponentBeats(cards,seat)) score+=35;
+  if(hand.length<=cards.length+4) score+=25;
+  return score;
+}
+function strategicLead(seat){
+  const hand=players[seat].hand, candidates=[], seen=new Set();
+  const add=(cards,kind='normal')=>{
+    if(!cards||!cards.length) return;
+    const key=cards.map(c=>c.id).sort((a,b)=>a-b).join(',');
+    if(seen.has(key)) return;
+    seen.add(key); candidates.push({cards,kind});
+  };
+  add(bestThrow(seat),'throw');
+  for(const group of ['T',...SUITS]){
+    const segment=hand.filter(c=>inGroup(c,group));
+    add(safeTractor(segment,seat),'tractor');
+    groupPairs(segment).forEach(pair=>add(pair,'pair'));
+    segment.forEach(card=>add([card],'single'));
+  }
+  let best=null, bestScore=-Infinity;
+  for(const candidate of candidates){
+    const score=leadCandidateScore(seat,candidate.cards,candidate.kind);
+    if(score>bestScore){ bestScore=score; best=candidate.cards; }
+  }
+  return best;
+}
 function aiLead(seat){
   const hand=players[seat].hand;
+  const strategic=strategicLead(seat);
+  if(strategic) return strategic;
   const tw=bestThrow(seat); if(tw) return tw;          // 1. 有把握的甩牌
   
   const nonTr=hand.filter(c=>!isTrump(c));
@@ -889,7 +945,7 @@ function aiLead(seat){
 
   // 5. 调主（主牌多时，主动出主牌消耗对手将牌）
   const T=hand.filter(c=>isTrump(c));
-  const oppTrumpMax=Math.max(0, ...players.filter(p=>p.idx!==seat).map(p=>p.hand.filter(isTrump).length));
+  const oppTrumpMax=unseenCardsForAI(seat).filter(isTrump).length;
   if(T.length>oppTrumpMax+1){
     const ttr=safeTractor(T, seat); if(ttr) return ttr;
 
@@ -919,6 +975,11 @@ function aiLead(seat){
   // 7. 兜底：出最小的非主牌（不送分给对手）
   const pool=(nonTr.length?nonTr:hand).slice().sort((a,b)=>pts(a)-pts(b)||tval(a)-tval(b));
   return [pool[0]];
+}
+function shouldRuff(seat,leadSize,trickPoints,isLastPlayer){
+  if(players[seat].hand.length<=leadSize+2) return true;
+  if(trickPoints>0) return true;
+  return isLastPlayer && teamPoints[1-declarerTeam]>=75;
 }
 function aiFollow(seat){
   const hand=players[seat].hand, lead=trick[0].combo;
@@ -970,7 +1031,7 @@ function aiFollow(seat){
   } else if(G.length===0){
     // 空对空的将吃逻辑
     const trickPts=trick.reduce((s,t)=>s+t.cards.reduce((s2,c)=>s2+pts(c),0),0);
-    const worthRuffing=trickPts>0 || hand.length===lead.size || (isLastPlayer && teamPoints[1-declarerTeam] >= 75); // 临界分
+    const worthRuffing=shouldRuff(seat,lead.size,trickPts,isLastPlayer);
     if(oppWin && worthRuffing){            // 用主牌将吃(含反扣)
       const T=hand.filter(c=>isTrump(c)).sort((a,b)=>tval(a)-tval(b));
       if(lead.type==='single' && T.length) { const c=safestBeat(T.filter(x=>beats([x])).map(x=>[x])); if(c) chosen=c; }
@@ -1058,23 +1119,35 @@ function throwBeatable(sel, group, seat){
   }
   return null;
 }
-// AI 甩牌: 找某副牌花色里≥2张当前无人能压、且无人缺门(防被毙)的牌
+// AI 只能知道自己的手牌、已出牌，以及自己坐庄时看到的底牌。
+// 未知牌不能按某个座位分配，只能作为“仍可能存在”的风险池使用。
+function knownCardsForAI(seat){
+  const ids=new Set(players[seat].hand.map(c=>c.id));
+  playedCards.forEach(c=>ids.add(c.id));
+  if(declarerSeat===seat) kitty.forEach(c=>ids.add(c.id));
+  return (dealPile||[]).filter(c=>ids.has(c.id));
+}
+function unseenCardsForAI(seat){
+  const known=new Set(knownCardsForAI(seat).map(c=>c.id));
+  return (dealPile||[]).filter(c=>!known.has(c.id));
+}
+
+// AI 甩牌: 只在未知牌已经无法构成毙牌风险时甩出，避免利用隐藏手牌。
 function bestThrow(seat){
-  const opps=players.filter(p=>p.idx!==seat), hand=players[seat].hand;
+  const hand=players[seat].hand, unseen=unseenCardsForAI(seat);
   let pick=null;
   for(const s of SUITS){
     const mine=hand.filter(c=>!isTrump(c)&&c.suit===s);
     if(mine.length<2) continue;
-    if(opps.some(p=>!p.hand.some(c=>!isTrump(c)&&c.suit===s))) continue;   // 有人缺这门, 可能被毙
-    const oppMax=Math.max(-1,...opps.flatMap(p=>p.hand.filter(c=>!isTrump(c)&&c.suit===s).map(tval)));
+    if(unseen.some(isTrump)) continue;
+    const oppMax=Math.max(-1,...unseen.filter(c=>!isTrump(c)&&c.suit===s).map(tval));
     const safe=mine.filter(c=>tval(c)>oppMax);
     if(safe.length>=2 && (!pick || safe.length>pick.length)) pick=safe;
   }
   return pick;
 }
 
-// 单个对手的手牌能不能大过给定组合(单/对/连对) —— anyOpponentBeats/remainingOppCanBeat 共用的核心比较,
-// 全信息判断(直接读手牌), 不是概率推测。
+// 一组候选牌能不能大过给定组合(单/对/连对)。
 function oppHandBeats(oppHand, combo){
   const group=combo.group;
   const inSuit=oppHand.filter(c=>inGroup(c,group));
@@ -1092,25 +1165,15 @@ function oppHandBeats(oppHand, combo){
   }
   return false;
 }
-// 全信息判断: seat 领出这个组合(单/对/连对), 对方阵营有没有人能大过 (读全部手牌, 非概率推测；
-// 队友大过没关系，分还是自己队的，所以只看对方两家 —— 这点和 bestThrow/throwBeatable 故意不同：
-// 那两个判断的是"甩牌是否会被任何人(含队友)压下去而失败"这条独立规则，不是"我方是否会丢分"。
+// 保守判断：未知牌池中仍存在能压过的组合，就认为对手可能有该牌。
+// 未知牌无法按座位分配，因此这里宁可高估风险，也不读取队友或人类的隐藏手牌。
 function anyOpponentBeats(cards, seat){
   const combo=detectCombo(cards); if(!combo) return true;
-  const opps=players.filter(p=>team(p.idx)!==team(seat));
-  return opps.some(opp=>oppHandBeats(opp.hand, combo));
+  return oppHandBeats(unseenCardsForAI(seat), combo);
 }
-// 这墩里"还没轮到出牌"的对方玩家中, 有没有人手牌能大过当前最大牌 bestCombo —— 全信息判断, 用来精确
-// 判定"这墩是不是已经稳了", 而不是只靠"是不是最后一家"/"当前是不是王牌"这种粗糙代理: 那样会漏掉很多
-// 其实已经稳了的情况, 比如对方主牌已经出光了、却因为还没轮到最后一家就白白不敢垫分。
+// 只要未知牌池仍能构成反超，就不把当前牌权视为绝对稳定。
 function remainingOppCanBeat(bestCombo, seat){
-  const cT=team(seat);
-  for(let pos=turnPos+1; pos<4; pos++){
-    const s=trickOrder[pos];
-    if(team(s)===cT) continue;
-    if(oppHandBeats(players[s].hand, bestCombo)) return true;
-  }
-  return false;
+  return oppHandBeats(unseenCardsForAI(seat), bestCombo);
 }
 // 拖拉机安全探测: 先试 pool 里真正最长的一段连对(可能含分), 无分或读全手牌确认安全就用;
 // 否则退回旧逻辑——只在不含分的牌里找连对(旧行为, 保底不送分, 但可能更短或找不到)。
