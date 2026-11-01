@@ -38,6 +38,7 @@
     <div class="seat" id="seat1"><span class="name">左家</span><div class="count"></div><div class="played"></div></div>
     <div class="seat" id="seat3"><span class="name">右家</span><div class="count"></div><div class="played"></div></div>
     <div class="seat" id="seat0"><div class="played"></div></div>
+    <div class="cg-toast" id="toast"></div>
   </div>
 
   <div id="hand-area">
@@ -381,6 +382,7 @@ function seqValue(rest,wc,g,nr){           // 连张: g=每点张数, nr=连续�
   if(rest.length+wc !== g*nr) return null;
   if(rest.some(c=>c.joker)) return null;
   const cnt={}; rest.forEach(c=>cnt[c.rank]=(cnt[c.rank]||0)+1);
+  let best=null;
   for(let start=1; start<=15-nr; start++){
     let ok=true, inWin=0;
     for(let i=0;i<nr;i++){
@@ -391,9 +393,12 @@ function seqValue(rest,wc,g,nr){           // 连张: g=每点张数, nr=连续�
     }
     if(!ok) continue;
     if(inWin!==rest.length) continue;      // 有牌落在窗口外
-    return start+nr-1;                      // 以顶点比大小
+    // 百搭能把同一组牌填进多个窗口(比如 678+两张百搭 既可当 4-8 也可当 6-10),
+    // 必须取能凑到的最大顶点 —— 否则选到的是最弱的解释, 明明压得过也会被判"打不过"。
+    const top=start+nr-1;
+    if(best===null||top>best) best=top;
   }
-  return null;
+  return best;
 }
 function tryFullHouse(sel,level){          // 三带二
   const rest=sel.filter(c=>!isWild(c,level)), wc=sel.length-rest.length;
@@ -476,32 +481,69 @@ function descText(d){
 }
 
 /* ============================ AI 候选生成 ============================ */
+/* 候选牌型枚举。关键点: 红桃级牌是百搭(逢人配), 必须参与组牌 —— 旧版按原始点数分组,
+   百搭只能当级牌用, 于是 AI 和「提示」都看不见 "百搭+KK=三张K"、"百搭补顺子" 这类合法手,
+   该压的压不住, 提示还会误报"没有能出的牌"。这里按"用 0..W 张百搭补齐"的方式枚举。 */
 function genMoves(hand,level){
-  const moves=[], byRank={}, jokers=[], rankCards={};
-  hand.forEach(c=>{
-    if(c.joker) jokers.push(c);
-    else { (byRank[c.rank]=byRank[c.rank]||[]).push(c); (rankCards[c.rank]=rankCards[c.rank]||[]).push(c); }
-  });
-  hand.forEach(c=>moves.push([c]));                       // 单张
+  const moves=[], seen=new Set();
+  const wilds=hand.filter(c=>isWild(c,level));
+  const base=hand.filter(c=>!isWild(c,level));
+  const W=wilds.length;
+  const push=sel=>{ if(!sel||!sel.length) return;
+    const k=sel.map(c=>c.id).sort((a,b)=>a-b).join(',');
+    if(seen.has(k)) return; seen.add(k); moves.push(sel); };
+  const byRank={}, jk={S:[],B:[]};
+  base.forEach(c=>{ if(c.joker) jk[c.joker].push(c); else (byRank[c.rank]=byRank[c.rank]||[]).push(c); });
+
+  hand.forEach(c=>push([c]));                                   // 单张(百搭单张按级牌算)
+  for(let w=2; w<=W; w++) push(wilds.slice(0,w));               // 纯百搭对(=级牌对)
+
+  // 同点 n 张: 对子 / 三张 / 炸弹, 允许用 w 张百搭补齐
   for(const r in byRank){ const g=byRank[r];
-    if(g.length>=2) moves.push(g.slice(0,2));
-    if(g.length>=3) moves.push(g.slice(0,3));
-    if(g.length>=4) moves.push(g.slice());                // 炸弹
+    for(let take=1; take<=g.length; take++)
+      for(let w=0; w<=W; w++){
+        if(take+w<2) continue;
+        if(w>0 && take+w>g.length+W) continue;
+        push([...g.slice(0,take),...wilds.slice(0,w)]);
+      }
   }
-  const sj=jokers.filter(c=>c.joker==='S'), bj=jokers.filter(c=>c.joker==='B');
-  if(sj.length>=2) moves.push(sj.slice(0,2));
-  if(bj.length>=2) moves.push(bj.slice(0,2));
-  if(sj.length>=2&&bj.length>=2) moves.push([...sj.slice(0,2),...bj.slice(0,2)]);
-  for(const r in byRank) if(byRank[r].length>=3)          // 三带二
-    for(const r2 in byRank) if(r2!==r&&byRank[r2].length>=2)
-      moves.push([...byRank[r].slice(0,3),...byRank[r2].slice(0,2)]);
-  const seq=(g,nr)=>{ for(let s=1;s<=15-nr;s++){ const sel=[]; let ok=true;
-    for(let i=0;i<nr;i++){ let r=s+i, ar=(r===1)?14:r; const cs=rankCards[ar]||[];
-      if(cs.length<g){ok=false;break;} for(let k=0;k<g;k++) sel.push(cs[k]); }
-    if(ok) moves.push(sel); } };
-  seq(1,5); seq(2,3); seq(3,2);                            // 顺子 / 三连对 / 钢板
+  if(jk.S.length>=2) push(jk.S.slice(0,2));                     // 王不能和百搭混用
+  if(jk.B.length>=2) push(jk.B.slice(0,2));
+  if(jk.S.length>=2&&jk.B.length>=2) push([...jk.S.slice(0,2),...jk.B.slice(0,2)]);
+
+  // 三带二: 三张和对子都可以掺百搭, 但两边合用的百搭不能超过手上的张数
+  const nOfAKind=n=>{ const res=[];
+    for(const r in byRank){ const g=byRank[r];
+      for(let w=0; w<=Math.min(W,n-1); w++) if(g.length>=n-w) res.push({cards:[...g.slice(0,n-w),...wilds.slice(0,w)],w,rank:+r});
+    } return res; };
+  const triples=nOfAKind(3), duos=nOfAKind(2);
+  for(const t of triples) for(const d of duos){
+    if(t.rank===d.rank || t.w+d.w>W) continue;
+    push([...t.cards, ...d.cards.filter(c=>!isWild(c,level)), ...wilds.slice(t.w, t.w+d.w)]);
+  }
+  if(W>=2) for(const t of triples)                                // 三张 + 一对百搭(当级牌对)
+    if(t.w===0 && t.rank!==level) push([...t.cards, ...wilds.slice(0,2)]);
+
+  // 连张: 顺子 / 三连对(木板) / 钢板。缺的点数用百搭顶上
+  const run=(g,nr,suit)=>{
+    for(let st=1; st<=15-nr; st++){
+      const sel=[]; let need=0;
+      for(let i=0;i<nr;i++){
+        const r=st+i, ar=(r===1)?14:r;
+        const cs=(byRank[ar]||[]).filter(c=>!suit||c.suit===suit);
+        const take=Math.min(g,cs.length);
+        for(let k=0;k<take;k++) sel.push(cs[k]);
+        need+=g-take;
+      }
+      if(need>W) continue;
+      push([...sel,...wilds.slice(0,need)]);
+    }
+  };
+  run(1,5); run(2,3); run(3,2);
+  for(const su of SUITS) run(1,5,su);                            // 同花顺(炸弹), 旧版只能瞎碰上
   return moves;
 }
+function wildCount(cards,level){ return cards.reduce((n,c)=>n+(isWild(c,level)?1:0),0); }
 
 /* ============================ 游戏状态 ============================ */
 const NAMES=['你','左家','对家','右家'];
@@ -564,7 +606,7 @@ function processReturns(){
     const pr=pendingReturns[retIndex];
     if(pr.receiver===0){                                     // 轮到你还贡
       returnMode=pr; renderAll(); updateButtons();
-      log(`请选一张不大于10的牌还贡给 ${NAMES[pr.payer]}，再按「出牌」`);
+      toast(`请选一张不大于 10 的牌，还贡给 ${NAMES[pr.payer]}`,'info',3200);
       Sound.speak("请还贡", 0);
       return;
     }
@@ -572,11 +614,18 @@ function processReturns(){
   }
   finalizeTribute();
 }
+/* 还贡的合法牌: 一张不大于 10 的普通牌。手上一张都没有时(理论上极少)依次放宽,
+   否则人类玩家会被卡在还贡界面上出不去 —— 以前只有 AI 的 autoReturn 有这个兜底。 */
+function returnCandidates(hand){
+  let cand=hand.filter(c=>!c.joker && !isWild(c,currentLevel) && c.rank<=10);
+  if(!cand.length) cand=hand.filter(c=>!c.joker && !isWild(c,currentLevel));
+  if(!cand.length) cand=hand.filter(c=>!isWild(c,currentLevel));
+  if(!cand.length) cand=hand.slice();
+  return cand;
+}
 function autoReturn(pr){
   const h=players[pr.receiver].hand;
-  let cand=h.filter(c=>!c.joker && !isWild(c,currentLevel) && c.rank<=10);
-  if(!cand.length) cand=h.filter(c=>!isWild(c,currentLevel));
-  if(!cand.length) cand=h.slice();
+  const cand=returnCandidates(h);
   const card=cand.sort((a,b)=>rvCard(a,currentLevel)-rvCard(b,currentLevel))[0];
   players[pr.receiver].hand=h.filter(c=>c.id!==card.id);
   players[pr.payer].hand.push(card);
@@ -591,7 +640,14 @@ function finishTribute(leader){
   currentPlayer=leader; renderAll(); step();
 }
 function showTributeInfo(lines,cb){ showOverlay('进贡 · 还贡', lines.join('<br>')||'无', cb, '开始出牌'); }
-function sortHand(h){ h.sort((a,b)=>rvCard(b,currentLevel)-rvCard(a,currentLevel) || SUITS.indexOf(a.suit)-SUITS.indexOf(b.suit)); }
+let sortMode='rank';                         // 'rank' 按大小 | 'suit' 按花色分堆
+function sortHand(h){
+  if(sortMode==='suit')
+    h.sort((a,b)=> (a.joker?-1:0)-(b.joker?-1:0) || SUITS.indexOf(a.suit)-SUITS.indexOf(b.suit)
+      || rvCard(b,currentLevel)-rvCard(a,currentLevel));
+  else
+    h.sort((a,b)=>rvCard(b,currentLevel)-rvCard(a,currentLevel) || SUITS.indexOf(a.suit)-SUITS.indexOf(b.suit));
+}
 function nextActive(i){ let j=(i+1)%4; let g=0; while(players[j].finished && g<4){ j=(j+1)%4; g++; } return j; }
 
 function step(){
@@ -665,7 +721,7 @@ function aiMove(idx){
   const bombIds=bombCardIds(hand), cand=[];
   for(const m of genMoves(hand,lvl)){
     const d=choosePlay(evaluateSelection(m,lvl),null); if(!d) continue;
-    cand.push({cards:m,desc:d,bk:breakage(m,hand),
+    cand.push({cards:m,desc:d,bk:breakage(m,hand),wd:wildCount(m,lvl),
       breaksBomb:d.category!=='bomb'&&m.some(c=>bombIds.has(c.id))});
   }
   const beats=cand.filter(c=>compareBeat(c.desc,req));
@@ -681,7 +737,8 @@ function aiMove(idx){
     if(!pool.length) pool=beats.filter(c=>c.desc.category==='normal');
     if(!pool.length) pool=beats;
     const out=goOut(pool); if(out) return out;
-    pool.sort((a,b)=>a.bk-b.bk || a.desc.value-b.desc.value || b.cards.length-a.cards.length);
+    // 百搭(逢人配)是手里最灵活的一张, 条件相当时留着
+    pool.sort((a,b)=>a.bk-b.bk || a.wd-b.wd || a.desc.value-b.desc.value || b.cards.length-a.cards.length);
     return pool[0];
   }
 
@@ -690,7 +747,7 @@ function aiMove(idx){
   const nb=norm.filter(c=>!c.breaksBomb), pool=nb.length?nb:norm;
   if(pool.length){
     const out=goOut(pool); if(out) return out;
-    pool.sort((a,b)=>a.desc.value-b.desc.value || a.bk-b.bk || a.cards.length-b.cards.length);
+    pool.sort((a,b)=>a.desc.value-b.desc.value || a.wd-b.wd || a.bk-b.bk || a.cards.length-b.cards.length);
     return pool[0];
   }
   // 只能动炸弹
@@ -750,7 +807,8 @@ function onPlay(){
     const sel=players[0].hand.filter(c=>selected.has(c.id));
     if(sel.length!==1){ flash('请选一张牌还贡'); return; }
     const card=sel[0];
-    if(card.joker||isWild(card,currentLevel)||card.rank>10){ flash('还贡必须是一张不大于10的牌'); return; }
+    const ok=new Set(returnCandidates(players[0].hand).map(c=>c.id));
+    if(!ok.has(card.id)){ flash('还贡必须是一张不大于 10 的普通牌'); return; }
     selected.clear();
     const pr=returnMode; const h=players[pr.receiver].hand;
     players[pr.receiver].hand=h.filter(c=>c.id!==card.id);
@@ -772,19 +830,39 @@ function onPass(){
   if(currentPlayer!==0||gameOver||!lastPlay) return;
   selected.clear(); applyPass(0); afterAction();
 }
+let hintPool=[], hintIdx=0, hintSig='';
 function onHint(){
-  if(currentPlayer!==0) return;
+  if(currentPlayer!==0||returnMode||gameOver) return;
   const req=lastPlay?lastPlay.desc:null;
-  const cand=[];
-  for(const m of genMoves(players[0].hand,currentLevel)){
-    const d=choosePlay(evaluateSelection(m,currentLevel),null);
-    if(d && compareBeat(d,req)) cand.push({cards:m,desc:d});
-  }
-  if(!cand.length){ flash('没有能出的牌，建议「不出」'); return; }
-  const norm=cand.filter(c=>c.desc.category==='normal'); const pool=norm.length?norm:cand;
-  pool.sort((a,b)=>(a.desc.value-b.desc.value)||(a.cards.length-b.cards.length));
-  selected=new Set(pool[0].cards.map(c=>c.id));
+  // 同一个局面里反复按「提示」会依次给出下一个候选, 而不是每次都给同一手牌
+  const sig=players[0].hand.map(c=>c.id).join(',')+'|'+(req?descText(req):'-');
+  if(sig!==hintSig){
+    // 按"打出去是同一手牌"(牌型+张数+大小)去重, 而不是按具体哪几张 ——
+    // 两副牌里同点同型的组合有一大堆, 不去重的话连按几次「提示」给的都是同一手牌,
+    // 只是换了张一模一样的复制牌。同一手牌里取拆得最少、最省百搭的那组。
+    const byPlay=new Map();
+    for(const m of genMoves(players[0].hand,currentLevel)){
+      const d=choosePlay(evaluateSelection(m,currentLevel),req);
+      if(!d||!compareBeat(d,req)) continue;
+      const cand={cards:m,desc:d,wd:wildCount(m,currentLevel),bk:breakage(m,players[0].hand)};
+      const k=d.category+'|'+d.type+'|'+d.len+'|'+d.value;
+      const cur=byPlay.get(k);
+      if(!cur || cand.wd<cur.wd || (cand.wd===cur.wd && cand.bk<cur.bk)) byPlay.set(k,cand);
+    }
+    const cand=[...byPlay.values()];
+    const norm=cand.filter(c=>c.desc.category==='normal');
+    hintPool=norm.length?norm:cand;
+    // 第一条提示跟 AI 自己会出的那手牌保持一致: 跟牌时"刚好压过的最便宜一手", 领出时"最不拆牌的一手"
+    hintPool.sort(req
+      ? (a,b)=>(a.desc.value-b.desc.value)||(a.wd-b.wd)||(a.bk-b.bk)||(a.cards.length-b.cards.length)
+      : (a,b)=>(a.bk-b.bk)||(a.wd-b.wd)||(a.desc.value-b.desc.value)||(b.cards.length-a.cards.length));
+    hintSig=sig; hintIdx=0;
+  } else if(hintPool.length) hintIdx=(hintIdx+1)%hintPool.length;
+  if(!hintPool.length){ flash(lastPlay?'没有能压过的牌，建议「不出」':'没有能出的牌'); return; }
+  const pick=hintPool[hintIdx];
+  selected=new Set(pick.cards.map(c=>c.id));
   renderHand();
+  toast(`提示 ${hintIdx+1}/${hintPool.length} · ${descText(pick.desc)}`,'info');
 }
 function toggleCard(id){
   if((currentPlayer!==0&&!returnMode)||gameOver) return;
@@ -815,8 +893,11 @@ function renderSeat(i){
 }
 function renderHand(){
   const h=document.getElementById('hand'); h.innerHTML='';
+  // 还贡时把还不出去的牌(王/百搭/大于10)压暗, 省得玩家靠试错找合法牌
+  const legal=returnMode ? new Set(returnCandidates(players[0].hand).map(c=>c.id)) : null;
   players[0].hand.forEach(c=>{
     const el=cardEl(c); if(selected.has(c.id)) el.classList.add('sel');
+    if(legal && !legal.has(c.id)) el.classList.add('dim');
     el.onclick=()=>toggleCard(c.id);
     h.appendChild(el);
   });
@@ -831,39 +912,57 @@ function renderAll(){
   renderHand();
   document.getElementById('lvlYou').textContent = valueName(teamLevels[0]) + (teamLevels[0]===14&&aFails[0]?'('+(aFails[0]+1)+')':'');
   document.getElementById('lvlOpp').textContent = valueName(teamLevels[1]) + (teamLevels[1]===14&&aFails[1]?'('+(aFails[1]+1)+')':'');
-  const turn = gameOver ? '' : (currentPlayer===0 ? ' · 轮到你出牌' : ' · 轮到'+NAMES[currentPlayer]);
-  document.getElementById('infoLine').textContent =
-    `级牌 ${valueName(currentLevel)}` + (lastPlay ? (' · 需压：'+descText(lastPlay.desc)) : ' · 自由出牌') + turn;
+  if(returnMode){
+    document.getElementById('infoLine').textContent =
+      `级牌 ${valueName(currentLevel)} · 还贡给 ${NAMES[returnMode.payer]}：选一张不大于 10 的牌`;
+  } else {
+    const turn = gameOver ? '' : (currentPlayer===0 ? ' · 轮到你出牌' : ' · 轮到'+NAMES[currentPlayer]);
+    document.getElementById('infoLine').textContent =
+      `级牌 ${valueName(currentLevel)}` + (lastPlay ? (' · 需压：'+descText(lastPlay.desc)) : ' · 自由出牌') + turn;
+  }
   document.getElementById('center-hint').style.display = lastPlay ? 'none' : (gameOver ? 'none' : 'block');
 }
 function updateButtons(){
+  const play=document.getElementById('btnPlay');
   if(returnMode){
-    document.getElementById('btnPlay').disabled=false;
+    play.textContent='还贡'; play.disabled=false;
     document.getElementById('btnPass').disabled=true;
     document.getElementById('btnHint').disabled=true;
     return;
   }
   const my=currentPlayer===0 && !gameOver;
-  document.getElementById('btnPlay').disabled=!my;
+  play.textContent='出牌'; play.disabled=!my;
   document.getElementById('btnPass').disabled=!my||!lastPlay;
   document.getElementById('btnHint').disabled=!my;
 }
 let logs=[];
 function log(t){ logs.unshift(t); logs=logs.slice(0,8); const el=document.getElementById('log'); if(el) el.innerHTML=logs.join('<br>'); }
-function flash(t){ log('⚠ '+t); Sound.play('warn'); }
+let toastTimer=null;
+function toast(t,kind,ms){
+  const el=document.getElementById('toast'); if(!el) return;
+  el.textContent=t; el.className='cg-toast show '+(kind||'');
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{ el.className='cg-toast '+(kind||''); }, ms||2000);
+}
+function flash(t){ log('⚠ '+t); toast(t,'warn',2600); Sound.play('warn'); }
 function showOverlay(title,body,cb,btn){
   document.getElementById('ovTitle').textContent=title;
   document.getElementById('ovBody').innerHTML=body;
   const o=document.getElementById('overlay'); o.style.display='flex';
   const b=document.getElementById('ovBtn'); b.textContent=btn||'继续';
   b.onclick=()=>{ o.style.display='none'; cb(); };
+  setTimeout(()=>b.focus(),0);                     // 让回车/空格就能确认, 不必非去点那颗按钮
 }
 
 /* ============================ 绑定 & 启动 ============================ */
 document.getElementById('btnPlay').onclick=onPlay;
 document.getElementById('btnPass').onclick=onPass;
 document.getElementById('btnHint').onclick=onHint;
-document.getElementById('btnSort').onclick=()=>{ sortHand(players[0].hand); renderHand(); };
+document.getElementById('btnSort').onclick=()=>{
+  sortMode = sortMode==='rank' ? 'suit' : 'rank';
+  sortHand(players[0].hand); renderHand();
+  toast(sortMode==='suit'?'理牌：按花色':'理牌：按大小','info',1400);
+};
 document.getElementById('btnHelp').onclick=()=>window.open('help.html','_blank');
 document.getElementById('sound-toggle').onclick=()=>Sound.toggleMute();
 Sound.updateToggleButton();
