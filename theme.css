@@ -161,6 +161,8 @@ body {
   font-size: 8px; font-weight: 500; font-family: var(--font-body); color: #fff;
   background: var(--card-red); border-radius: 3px; padding: 0 3px; letter-spacing: .04em;
 }
+#hand .card.dim { opacity: .34; filter: grayscale(.6); }
+
 .mini { width: 30px; height: 43px; font-size: 13px; padding: 3px 0 0 4px; }
 .mini .r { font-size: 13px; } .mini .s { font-size: 12px; }
 .mini.card.wild::after { font-size: 6px; padding: 0 2px; bottom: 2px; }  /* 小堆牌里缩小徽标, 而不是隐藏(与满尺寸手牌保持一致) */
@@ -216,6 +218,22 @@ button {
 }
 button:disabled { opacity: .36; cursor: default; box-shadow: none; }
 button.ghost { background: rgba(255,255,255,.06); color: var(--ink); box-shadow: none; border: 1px solid var(--panel-edge); }
+
+/* ---------- toast (出牌被拒 / 提示 / 规则说明的即时反馈) ----------
+   原先这些话只走 log(), 而 log 面板在竖屏改版里被移除了 -> #log 不存在, 提示全部静默丢失,
+   玩家只听见一声 warn 却不知道哪里不合法。改成牌桌上方的一条浮层, 两个游戏共用。 */
+.cg-toast {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(.96);
+  z-index: 25; max-width: min(300px, 82%); box-sizing: border-box; text-align: center;
+  padding: 10px 16px; border-radius: 14px; background: rgba(8,12,16,.92);
+  border: 1px solid var(--panel-edge); color: var(--ink);
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 700; line-height: 1.5;
+  box-shadow: 0 12px 30px rgba(0,0,0,.5); pointer-events: none;
+  opacity: 0; transition: opacity .16s ease, transform .16s ease;
+}
+.cg-toast.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+.cg-toast.warn { border-color: var(--card-red); color: var(--card-red); }
+.cg-toast.info { border-color: var(--accent); color: var(--accent); }
 
 /* ---------- overlay ---------- */
 #overlay {
